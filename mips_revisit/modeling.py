@@ -202,7 +202,7 @@ class BertModel(object):
 
                 # Run the stacked transformer.
                 # `sequence_output` shape = [batch_size, seq_length, hidden_size].
-                self.all_encoder_layers = transformer_model(
+                self.all_encoder_layers, self.attn = transformer_model(
                     input_tensor=self.embedding_output,
                     attention_mask=attention_mask,
                     hidden_size=config.hidden_size,
@@ -805,7 +805,7 @@ def attention_layer(
             [batch_size, from_seq_length, num_attention_heads * size_per_head],
         )
 
-    return context_layer
+    return context_layer, attention_scores
 
 
 def transformer_model(
@@ -885,6 +885,7 @@ def transformer_model(
     prev_output = reshape_to_matrix(input_tensor)
 
     all_layer_outputs = []
+    attns = []
     for layer_idx in range(num_hidden_layers):
         with tf.variable_scope("layer_%d" % layer_idx):
             layer_input = prev_output
@@ -892,7 +893,7 @@ def transformer_model(
             with tf.variable_scope("attention"):
                 attention_heads = []
                 with tf.variable_scope("self"):
-                    attention_head = attention_layer(
+                    attention_head, attn_layer = attention_layer(
                         from_tensor=layer_input,
                         to_tensor=layer_input,
                         attention_mask=attention_mask,
@@ -905,6 +906,7 @@ def transformer_model(
                         from_seq_length=seq_length,
                         to_seq_length=seq_length,
                     )
+                    attns.append(attn_layer)
                     attention_heads.append(attention_head)
 
                 attention_output = None
@@ -958,7 +960,8 @@ def transformer_model(
         for layer_output in all_layer_outputs:
             final_output = reshape_from_matrix(layer_output, input_shape)
             final_outputs.append(final_output)
-        return final_outputs
+            # attns = Batch x Layer x Head x Seqlen x SeqLen
+        return final_outputs, tf.stack(attns, axis=1)
     else:
         final_output = reshape_from_matrix(prev_output, input_shape)
         return final_output

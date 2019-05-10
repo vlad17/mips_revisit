@@ -698,6 +698,8 @@ def create_model(
         "output_bias", [num_labels], initializer=tf.zeros_initializer()
     )
 
+    attn = model.attn
+
     with tf.variable_scope("loss"):
         if is_training:
             # I.e., 0.1 dropout
@@ -713,7 +715,7 @@ def create_model(
         per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
         loss = tf.reduce_mean(per_example_loss)
 
-        return (loss, per_example_loss, logits, probabilities)
+        return (loss, per_example_loss, logits, probabilities, attn)
 
 
 def model_fn_builder(
@@ -753,7 +755,7 @@ def model_fn_builder(
 
         is_training = mode == tf.estimator.ModeKeys.TRAIN
 
-        (total_loss, per_example_loss, logits, probabilities) = create_model(
+        (total_loss, per_example_loss, logits, probabilities, attn) = create_model(
             bert_config,
             is_training,
             input_ids,
@@ -815,7 +817,7 @@ def model_fn_builder(
         elif mode == tf.estimator.ModeKeys.EVAL:
 
             def metric_fn(
-                per_example_loss, label_ids, logits, is_real_example
+                    per_example_loss, label_ids, logits, is_real_example, attn
             ):
                 predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
                 accuracy = tf.metrics.accuracy(
@@ -830,7 +832,7 @@ def model_fn_builder(
 
             eval_metrics = (
                 metric_fn,
-                [per_example_loss, label_ids, logits, is_real_example],
+                [per_example_loss, label_ids, logits, is_real_example, attn],
             )
             output_spec = tf.contrib.tpu.TPUEstimatorSpec(
                 mode=mode,
@@ -841,7 +843,7 @@ def model_fn_builder(
         else:
             output_spec = tf.contrib.tpu.TPUEstimatorSpec(
                 mode=mode,
-                predictions={"probabilities": probabilities},
+                predictions={"probabilities": probabilities, "attn": attn},
                 scaffold_fn=scaffold_fn,
             )
         return output_spec
