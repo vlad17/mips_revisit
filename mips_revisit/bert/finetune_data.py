@@ -19,6 +19,9 @@ def get_glue(task):
 
     glue_dir = os.path.join(data_dir, "glue_data")
     os.makedirs(glue_dir, exist_ok=True)
+
+    task = task.upper()
+
     task_dir = os.path.join(glue_dir, task)
 
     if os.path.isdir(task_dir):
@@ -46,7 +49,7 @@ def get_glue(task):
             sys.executable,
             os.path.join(glue_repo_dir, "download_glue_data.py"),
             "--data_dir={}".format(glue_dir),
-            "--tasks={}".format(task.upper()),
+            "--tasks={}".format(task),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

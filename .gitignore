@@ -1,6 +1,7 @@
 # Data-dependent things
 data/*
 !data/README.md
+!data/sample_text.txt
 generated/*
 !generated/README.md
 plots/*

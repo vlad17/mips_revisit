@@ -2,11 +2,9 @@
 Various utility functions used across several files.
 """
 
-import os
 import collections
 import hashlib
 import itertools
-import json
 import random
 import time
 from contextlib import contextmanager
@@ -77,7 +75,7 @@ def seed_all(seed):
     independently."""
     log.debug("seeding with seed {}", seed)
     np.random.seed(seed)
-    rand_seed, tf_seed = _next_seeds(3)
+    rand_seed, tf_seed = _next_seeds(2)
     random.seed(rand_seed)
     tf.random.set_random_seed(tf_seed)
 
@@ -195,19 +193,3 @@ class OnlineSampler:
         if random.random() < self.k / self.n:
             i = random.randrange(self.k)
             self.sample[i] = example
-
-
-def colab_env():
-    assert "COLAB_TPU_ADDR" in os.environ
-    TPU_ADDRESS = "grpc://" + os.environ["COLAB_TPU_ADDR"]
-
-    from google.colab import auth
-
-    auth.authenticate_user()
-    with tf.Session(TPU_ADDRESS) as session:
-        # Upload credentials to TPU.
-        with open("/content/adc.json", "r") as f:
-            auth_info = json.load(f)
-        tf.contrib.cloud.configure_gcs(session, credentials=auth_info)
-
-    return TPU_ADDRESS

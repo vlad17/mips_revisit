@@ -22,9 +22,7 @@ import os
 
 import tensorflow as tf
 
-import modeling
-import optimization
-import tokenization
+from . import modeling, optimization, tokenization
 
 flags = tf.flags
 
