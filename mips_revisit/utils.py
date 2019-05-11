@@ -48,7 +48,7 @@ def timeit(info=True, debug=False, before=None, after=None, name=None):
     yield x
     x.set_seconds(time.time() - t)
     if name:
-        logf("took {:10.2f} sec to" + name, x.seconds)
+        logf("took {:10.2f} sec to " + name, x.seconds)
     if after:
         logf(after, x.seconds)
 

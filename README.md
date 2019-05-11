@@ -1,6 +1,7 @@
-# mips-revisit: Failure-driven Decision Making
+# mips_revisit
 
-This module, `mips_revisit`, defines the modules and evaluation scripts for TODO.
+This module, `mips_revisit`, defines the modules and evaluation scripts for MIPS-based
+attention on transformer models.
 
 ## Setup
 

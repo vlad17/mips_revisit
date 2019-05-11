@@ -818,6 +818,7 @@ def model_fn_builder(
                 train_op=train_op,
                 scaffold_fn=scaffold_fn,
             )
+
         elif mode == tf.estimator.ModeKeys.EVAL:
 
             def metric_fn(

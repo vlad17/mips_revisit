@@ -8,6 +8,8 @@ import subprocess
 import sys
 
 from . import run_classifier
+from .. import log
+from ..utils import timeit
 
 
 def get_glue(task):
@@ -34,12 +36,19 @@ def get_glue(task):
     glue_dir = os.path.join(data_dir, "glue_data")
     os.makedirs(glue_dir, exist_ok=True)
 
-    task = task.upper()
+    utask = task.upper()
 
-    task_dir = os.path.join(glue_dir, task)
+    task_dir = os.path.join(glue_dir, utask)
 
     if os.path.isdir(task_dir):
-        return _get_processor(task, task_dir)
+        log.info("glue data for task {} already present in {}", task, task_dir)
+        return _get_processor(utask, task_dir)
+
+    with timeit(name="load glue data for {} into {}".format(task, task_dir)):
+        return _get_glue(data_dir, glue_dir, task_dir, utask)
+
+
+def _get_glue(data_dir, glue_dir, task_dir, task):
 
     glue_repo_dir = os.path.join(data_dir, "download_glue_repo")
 

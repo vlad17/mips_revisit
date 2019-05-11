@@ -66,15 +66,12 @@ flags.DEFINE_string(
 
 def _main(_argv):
     log.init()
+    if type(tf.contrib) != type(tf):
+        tf.contrib._warning = None
     tf.logging.set_verbosity(tf.logging.ERROR)
 
-    with timeit(name="load glue data for {}".format(flags.FLAGS.task)):
-        glue_data = get_glue(flags.FLAGS.task)
-    log.info("glue data loaded in {}", glue_data.bound_data_dir)
-
-    with timeit(name="auth colab tpu"):
-        tpu_addr, num_tpu_cores = colab_env()
-    log.info("tpu at {}", tpu_addr)
+    glue_data = get_glue(flags.FLAGS.task)
+    tpu_addr, num_tpu_cores = colab_env()
 
     seed_all(1234)
 
@@ -231,16 +228,16 @@ def _main(_argv):
         predictions = estimator.predict(predict_input_fn)
         predictions = list(predictions)
 
-        for example, prediction in zip(prediction_examples, predictions):
-            print(
-                "text_a: %s\ntext_b: %s\nlabel:%s\nprediction:%s\n"
-                % (
-                    example.text_a,
-                    example.text_b,
-                    str(example.label),
-                    prediction["probabilities"],
-                )
-            )
+        # for example, prediction in zip(prediction_examples, predictions):
+        #     print(
+        #         "text_a: %s\ntext_b: %s\nlabel:%s\nprediction:%s\n"
+        #         % (
+        #             example.text_a,
+        #             example.text_b,
+        #             str(example.label),
+        #             prediction["probabilities"],
+        #         )
+        #     )
         return predictions
 
     model_train(estimator_from_checkpoints)

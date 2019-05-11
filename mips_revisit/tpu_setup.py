@@ -4,8 +4,18 @@ import os
 
 import tensorflow as tf
 
+from . import log
+from .utils import timeit
+
 
 def colab_env():
+    with timeit(name="auth colab tpu"):
+        tpu_addr, num_tpu_cores = _colab_env()
+    log.info("tpu at {}", tpu_addr)
+    return tpu_addr, num_tpu_cores
+
+
+def _colab_env():
     assert "COLAB_TPU_ADDR" in os.environ
     TPU_ADDRESS = "grpc://" + os.environ["COLAB_TPU_ADDR"]
 
@@ -48,7 +58,7 @@ def make_tpu_estimator(
 
 
 def _get_run_config(ckpt_dir, tpu_addr, num_tpu_cores, save_checkpoints_steps):
-    ITERATIONS_PER_LOOP = 1000
+    ITERATIONS_PER_LOOP = min(1000, save_checkpoints_steps)
     tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(
         tpu_addr
     )
