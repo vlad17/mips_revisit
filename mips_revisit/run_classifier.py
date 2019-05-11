@@ -755,7 +755,13 @@ def model_fn_builder(
 
         is_training = mode == tf.estimator.ModeKeys.TRAIN
 
-        (total_loss, per_example_loss, logits, probabilities, attn) = create_model(
+        (
+            total_loss,
+            per_example_loss,
+            logits,
+            probabilities,
+            attn,
+        ) = create_model(
             bert_config,
             is_training,
             input_ids,
@@ -817,7 +823,7 @@ def model_fn_builder(
         elif mode == tf.estimator.ModeKeys.EVAL:
 
             def metric_fn(
-                    per_example_loss, label_ids, logits, is_real_example, attn
+                per_example_loss, label_ids, logits, is_real_example, attn
             ):
                 predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
                 accuracy = tf.metrics.accuracy(

@@ -65,29 +65,28 @@ import os
 
 from absl import app, flags
 
-from ..utils import seed_all, timeit
 from .. import log
 from ..bert.finetune_data import get_glue
+from ..utils import colab_env, seed_all, timeit
 
-flags.DEFINE_enum(
-    "task", None, ["mrpc"],
-    "BERT fine-tuning task"
-)
+flags.DEFINE_enum("task", None, ["mrpc"], "BERT fine-tuning task")
 
 flags.DEFINE_string(
-    "output_directory", None,
-    "generated artifact output directory"
+    "output_directory", None, "generated artifact output directory"
 )
+
 
 def _main(_argv):
     log.init()
 
-    with timeit(name='loading glue data'):
-        dd = get_glue(flags.FLAGS.task)
+    with timeit(name="load glue data for {}".format(flags.FLAGS.task)):
+        glue_dir = get_glue(flags.FLAGS.task)
 
-    K = 10
+    with timeit(name="configure colab tpu"):
+        tpu_addr = colab_env()
 
-    log.info("Hello, World! K = {}", K)
+    log.info("got tpu {}", tpu_addr)
+
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("task")
