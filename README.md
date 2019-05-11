@@ -14,8 +14,10 @@ source activate mips-revisit-env
 
 Run BERT pretraining with approximate K-MIPS (default K = 10)
 ```
-python -m mips-revisit.main.pretrain_bert --attention approx-mips
-# [2020-08-08 19:51:03 PDT mips_revisit/log.py:102] Hello, World! K = 10
+(mips-revisit-env) 10:23:58 vlad@vlad-T460:~/dev/mips-att$ python -m mips_revisit.main.attention_decay --task mrpc --output_directory gs://hello
+[2019-05-11 10:24:35 PDT mips_revisit/utils.py:41] loading glue data
+[2019-05-11 10:24:38 PDT mips_revisit/utils.py:47] took       2.21 sec toloading glue data
+[2019-05-11 10:24:38 PDT mips_revisit/main/attention_decay.py:90] Hello, World! K = 10
 ```
 
 ## Dev info
