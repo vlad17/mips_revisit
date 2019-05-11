@@ -21,17 +21,19 @@ fine_tuning/final_model.ckpt
 # pictures of activation distribution
 plots/{layer,head,from_index}.pdf
 
-# detailed TF logs from fine tuning
-logs/fine_tuning.txt
+[TODO: implement these
+  # detailed TF logs from fine tuning
+  logs/fine_tuning.txt
+  # detailed TF logs from evaluation
+  logs/eval.txt
+  # tee'd stdout
+  logs/stdout.txt
 
-# detailed TF logs from evaluation
-logs/eval.txt
-
-# tee'd stdout [TODO: tee to gs://?]
-logs/stdout.txt
-[TODO: do it like this:
+  would require messing with
         with tf.gfile.GFile(output_eval_file, "w") as writer:
             writer.write("%s = %s\n" % (key, str(result[key])))
+  + creating a stream handler to that writer
+  + wiring into logging.getLogger('tensorflow')
 ]
 
 # array, indexed by "to" position, of average activations
@@ -43,31 +45,9 @@ summary.json
 TODO: structure of summary.json
 """
 
-# [LATER!] compare to fine-tuning and evaluating with top-k and top-k 50% decay
-
-# inferred specific for task:
-# --> bert base
-# --> bert params
-# --> comparison dev/test
-
-# procedure:
-# pull cased bert base (stdout: success/timeit)
-# fine tuning (stdout: fine tuning params FOR TASK)
-#             (stdout: 100-update training procedure logs)
-#             (stdout: final timeit)
-#             (stdout: final dev eval, compare to paper FOR TASK)
-# test eval (stdout) -- whole test
-# eval for task, compare to paper for task
-#
-# get giant activation tensor -- whole test, batched
-# make pretty above plots
-# (stdout: writing plot to ...)
-# (stdout: writing marginal activations to ...npy)
-# (print #activations > 1e-1, 1e-2, 1e-3).
-
+import datetime
 import os
 import tempfile
-import datetime
 
 import tensorflow as tf
 from absl import app, flags
@@ -86,10 +66,11 @@ flags.DEFINE_string(
 
 def _main(_argv):
     log.init()
+    tf.logging.set_verbosity(tf.logging.ERROR)
 
     with timeit(name="load glue data for {}".format(flags.FLAGS.task)):
-        glue_dir = get_glue(flags.FLAGS.task)
-    log.info("glue data loaded in {}", glue_dir)
+        glue_data = get_glue(flags.FLAGS.task)
+    log.info("glue data loaded in {}", glue_data.bound_data_dir)
 
     with timeit(name="auth colab tpu"):
         tpu_addr, num_tpu_cores = colab_env()
@@ -100,46 +81,54 @@ def _main(_argv):
     out_dir = os.path.join(flags.FLAGS.output_directory, flags.FLAGS.task)
     tf.gfile.MakeDirs(out_dir)
 
-    BERT_MODEL = "cased_L-12_H-768_A-12"
+    # [LATER!] compare to fine-tuning and evaluating with top-k and top-k 50% decay
 
-    TRAIN_BATCH_SIZE = 32
-    EVAL_BATCH_SIZE = 8
-    PREDICT_BATCH_SIZE = 8
-    LEARNING_RATE = 2e-5
-    NUM_TRAIN_EPOCHS = 3.0
-    MAX_SEQ_LENGTH = 128
-    # Warmup is a period of time where hte learning rate
-    # is small and gradually increases--usually helps training.
-    WARMUP_PROPORTION = 0.1
+    # inferred specific for task:
+    # --> bert base
+    # --> bert params
+    # --> comparison dev/test
 
+    # procedure:
+    # pull cased bert base (stdout: success/timeit)
+    # fine tuning (stdout: fine tuning params FOR TASK)
+    #             (stdout: 100-update training procedure logs)
+    #             (stdout: final timeit)
+    #             (stdout: final dev eval, compare to paper FOR TASK)
+    # test eval (stdout) -- whole test
+    # eval for task, compare to paper for task
+    #
+    # get giant activation tensor -- whole test, batched
+    # make pretty above plots
+    # (stdout: writing plot to ...)
+    # (stdout: writing marginal activations to ...npy)
+    # (print #activations > 1e-1, 1e-2, 1e-3).
+
+    from ..params import bert_pretrain_params, bert_task_fine_tuning_params
     from ..bert import run_classifier, modeling
-    from ..params import TEP
+    from ..bert import tokenization
 
-    TASK_DATA_DIR = glue_dir
-    BERT_PRETRAINED_DIR = "gs://cloud-tpu-checkpoints/bert/" + BERT_MODEL
-    CONFIG_FILE = os.path.join(BERT_PRETRAINED_DIR, "bert_config.json")
-    INIT_CHECKPOINT = os.path.join(BERT_PRETRAINED_DIR, "bert_model.ckpt")
-    IS_CASED = True
+    ## input
+    ckpt_dir = os.path.join(out_dir, "fine_tuning")
 
-    processors = {
-        "cola": run_classifier.ColaProcessor,
-        "mnli": run_classifier.MnliProcessor,
-        "mrpc": run_classifier.MrpcProcessor,
-    }
-    processor = processors[flags.FLAGS.task.lower()]()
-    label_list = processor.get_labels()
+    ## pre-cooked stuff
 
-    # Compute number of train and warmup steps from batch size
-    train_examples = processor.get_train_examples(TASK_DATA_DIR)
-    num_train_steps = int(
-        len(train_examples) / TRAIN_BATCH_SIZE * NUM_TRAIN_EPOCHS
+    task_params = bert_task_fine_tuning_params(flags.FLAGS.task)
+    bert_model = "cased_L-12_H-768_A-12"
+    train_examples = glue_data.train()
+    pretrain_params = bert_pretrain_params(bert_model)
+    max_seq_length = task_params["max_seq_length"]
+    batch_sizes = task_params["batch_sizes"]
+    num_train_steps = (
+        task_params["max_epochs"] * len(train_examples) // batch_sizes.train
     )
-    num_warmup_steps = int(num_train_steps * WARMUP_PROPORTION)
+    num_warmup_steps = int(num_train_steps * task_params["warmup_proportion"])
     model_fn = run_classifier.model_fn_builder(
-        bert_config=modeling.BertConfig.from_json_file(CONFIG_FILE),
-        num_labels=len(label_list),
-        init_checkpoint=INIT_CHECKPOINT,
-        learning_rate=LEARNING_RATE,
+        bert_config=modeling.BertConfig.from_json_file(
+            pretrain_params["config_file"]
+        ),
+        num_labels=len(glue_data.get_labels()),
+        init_checkpoint=pretrain_params["init_checkpoint"],
+        learning_rate=task_params["base_lr"],
         num_train_steps=num_train_steps,
         num_warmup_steps=num_warmup_steps,
         use_tpu=True,
@@ -147,20 +136,16 @@ def _main(_argv):
     )
 
     estimator_from_checkpoints = make_tpu_estimator(
-        ckpt_dir=os.path.join(out_dir, "fine_tuning"),
+        ckpt_dir=ckpt_dir,
         tpu_addr=tpu_addr,
         num_tpu_cores=num_tpu_cores,
         model_fn=model_fn,
-        batch_sizes=TEP(32, 8, 8),
+        batch_sizes=batch_sizes,
         save_checkpoints_steps=1000,
     )
 
-    from ..bert import tokenization
-
-    TOKENIZATION_VOCAB = os.path.join(BERT_PRETRAINED_DIR, "vocab.txt")
-
     tokenizer = tokenization.FullTokenizer(
-        TOKENIZATION_VOCAB, do_lower_case=(not IS_CASED)
+        pretrain_params["tokens"], pretrain_params["is_cased"]
     )
 
     # Train the model
@@ -171,7 +156,7 @@ def _main(_argv):
         )
         # We'll set sequences to be at most 128 tokens long.
         train_features = run_classifier.convert_examples_to_features(
-            train_examples, label_list, MAX_SEQ_LENGTH, tokenizer
+            train_examples, glue_data.get_labels(), max_seq_length, tokenizer
         )
         print(
             "***** Started training at {} *****".format(
@@ -179,11 +164,10 @@ def _main(_argv):
             )
         )
         print("  Num examples = {}".format(len(train_examples)))
-        print("  Batch size = {}".format(TRAIN_BATCH_SIZE))
-        tf.logging.info("  Num steps = %d", num_train_steps)
+        print("  Batch size = {}".format(batch_sizes.train))
         train_input_fn = run_classifier.input_fn_builder(
             features=train_features,
-            seq_length=MAX_SEQ_LENGTH,
+            seq_length=max_seq_length,
             is_training=True,
             drop_remainder=True,
         )
@@ -196,9 +180,9 @@ def _main(_argv):
 
     def model_eval(estimator):
         # Eval the model.
-        eval_examples = processor.get_dev_examples(TASK_DATA_DIR)
+        eval_examples = glue_data.val()
         eval_features = run_classifier.convert_examples_to_features(
-            eval_examples, label_list, MAX_SEQ_LENGTH, tokenizer
+            eval_examples, glue_data.get_labels(), max_seq_length, tokenizer
         )
 
         print(
@@ -207,14 +191,14 @@ def _main(_argv):
             )
         )
         print("  Num examples = {}".format(len(eval_examples)))
-        print("  Batch size = {}".format(EVAL_BATCH_SIZE))
+        print("  Batch size = {}".format(batch_sizes.eval))
 
         # Eval will be slightly WRONG on the TPU because it will truncate
         # the last batch.
-        eval_steps = int(len(eval_examples) / EVAL_BATCH_SIZE)
+        eval_steps = int(len(eval_examples) / batch_sizes.eval)
         eval_input_fn = run_classifier.input_fn_builder(
             features=eval_features,
-            seq_length=MAX_SEQ_LENGTH,
+            seq_length=max_seq_length,
             is_training=False,
             drop_remainder=True,
         )
@@ -233,11 +217,14 @@ def _main(_argv):
         # Make predictions on a subset of eval examples
         prediction_examples = exs
         input_features = run_classifier.convert_examples_to_features(
-            prediction_examples, label_list, MAX_SEQ_LENGTH, tokenizer
+            prediction_examples,
+            glue_data.get_labels(),
+            max_seq_length,
+            tokenizer,
         )
         predict_input_fn = run_classifier.input_fn_builder(
             features=input_features,
-            seq_length=MAX_SEQ_LENGTH,
+            seq_length=max_seq_length,
             is_training=False,
             drop_remainder=True,
         )
@@ -258,7 +245,7 @@ def _main(_argv):
 
     model_train(estimator_from_checkpoints)
     model_eval(estimator_from_checkpoints)
-    ex = processor.get_dev_examples(TASK_DATA_DIR)[:64]
+    ex = glue_data.val()[:64]
     ls = model_predict(estimator_from_checkpoints, ex)
 
     import numpy as np
@@ -269,7 +256,7 @@ def _main(_argv):
     from scipy.special import softmax
 
     sattn = softmax(attn, -1)
-    sattn_sorted = np.sort(sattn) # axis=-1
+    sattn_sorted = np.sort(sattn)  # axis=-1
 
     plt = import_matplotlib()
 

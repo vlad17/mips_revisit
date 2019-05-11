@@ -22,7 +22,9 @@ import os
 
 import tensorflow as tf
 
-from . import modeling, optimization, tokenization
+import modeling
+import optimization
+import tokenization
 
 flags = tf.flags
 
@@ -210,15 +212,6 @@ class InputFeatures(object):
 
 class DataProcessor(object):
     """Base class for data converters for sequence classification data sets."""
-
-    def train(self):
-        return self.get_train_examples(self.bound_data_dir)
-
-    def val(self):
-        return self.get_dev_examples(self.bound_data_dir)
-
-    def test(self):
-        return self.get_test_examples(self.bound_data_dir)
 
     def get_train_examples(self, data_dir):
         """Gets a collection of `InputExample`s for the train set."""
@@ -737,9 +730,7 @@ def model_fn_builder(
 ):
     """Returns `model_fn` closure for TPUEstimator."""
 
-    def model_fn(
-        features, labels, mode, params
-    ):  # pylint: disable=unused-argument
+    def model_fn(features, labels, mode):
         """The `model_fn` for TPUEstimator."""
 
         tf.logging.info("*** Features ***")

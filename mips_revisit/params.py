@@ -18,3 +18,28 @@ class TEP:
         self.train = train
         self.eval = eval
         self.predict = predict
+
+
+# params for the pre-trained model
+def bert_pretrain_params(bert_model):
+    pretrain_dir = "gs://cloud-tpu-checkpoints/bert/" + bert_model
+    return {
+        "pretrain_dir": pretrain_dir,
+        "config_file": pretrain_dir + "/bert_config.json",
+        "init_checkpoint": pretrain_dir + "/bert_model.ckpt",
+        "tokens": pretrain_dir + "/vocab.txt",
+        "is_cased": "uncased" not in bert_model,
+    }
+
+
+# fine-tuning params
+def bert_task_fine_tuning_params(task):
+    if task == "mrpc":
+        return {
+            "batch_sizes": TEP(32, 8, 8),
+            "base_lr": 2e-5,
+            "max_epochs": 3,
+            "max_seq_length": 128,
+            "warmup_proportion": 0.1,
+        }
+    raise ValueError("unknown task " + task)
