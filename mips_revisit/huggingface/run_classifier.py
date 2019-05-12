@@ -621,6 +621,7 @@ def main(args, return_attn=False, attn_subsample_size=64):
     #
     # marginal attn is true average
     # of sorted attentions by "to" index
+    # shape is layer x head x from x to
     #
     # subsampled attns returns subsampled attn matrix as
     # (subsample batch) x layer x head x from x to

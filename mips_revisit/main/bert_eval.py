@@ -115,7 +115,10 @@ def _main(_argv):
 
     # generate and save plots
     # attns = Batch x Layer x Head x Seqlen (from) x SeqLen (to)
+    # marginal = layer x head x from x to
+    # recall it's *ordered* on to index.
     plt = import_matplotlib()
+    marginal = marginal.mean(axis=2).mean(axis=1).mean(axis=0)
 
     def semilogy(mat_bx):
         """plots b logscale curves, min max and median values"""
@@ -140,6 +143,7 @@ def _main(_argv):
         plt.ylabel("softmax weight")
 
     out_dir = os.path.join(local_dir, "plots")
+    os.makedirs(out_dir)
 
     outfile = os.path.join(out_dir, "layer.pdf")
     log.info("generating {}", outfile)
