@@ -1017,7 +1017,6 @@ def main(args, return_attn=False, attn_subsample_size=64):
         nb_eval_steps = 0
         preds = []
 
-
         for input_ids, input_mask, segment_ids, label_ids in tqdm(
             eval_dataloader, desc="Evaluating"
         ):

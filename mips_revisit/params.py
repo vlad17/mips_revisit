@@ -9,6 +9,19 @@ for various different tasks.
 
 import argparse
 
+GLUE_TASK_NAMES = [
+    "cola",
+    "sst-2",
+    "mrpc",
+    "sts-b",
+    "qqp",
+    "mnli",
+    "mnli-mm",
+    "qnli",
+    "rte",
+    "wnli",
+]
+
 
 def bert_glue_params(task):
     """
@@ -37,19 +50,7 @@ def bert_glue_params(task):
     args.bert_model = bert_model
     args.task_name = task
 
-    glue = [
-            "cola",
-        "sst-2",
-        "mrpc",
-        "sts-b",
-        "qqp",
-        "mnli",
-        "mnli-mm",
-        "qnli",
-        "rte",
-        "wnli"]
-
-    if task in glue:
+    if task in GLUE_TASK_NAMES:
         args.max_seq_length = 128
         args.do_lower_case = is_lower
         args.train_batch_size = 32

@@ -23,10 +23,10 @@ from absl import app, flags
 from .. import log
 from ..glue import get_glue
 from ..huggingface.run_classifier import main
-from ..params import bert_glue_params
+from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..utils import seed_all
 
-flags.DEFINE_enum("task", None, ["mrpc"], "BERT fine-tuning task")
+flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
 flags.DEFINE_string("out_dir", None, "checkpoint output directory")
 

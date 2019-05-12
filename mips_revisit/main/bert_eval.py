@@ -15,22 +15,22 @@ activations.npy - array, indexed by "to" position, of average activations
 summary.json - dev set evaluation scores.
 """
 
-import os
 import json
+import os
 import shutil
 import tempfile
 
+import numpy as np
 import tensorflow as tf
 from absl import app, flags
-import numpy as np
 
 from .. import log
 from ..glue import get_glue
 from ..huggingface.run_classifier import main
-from ..params import bert_glue_params
+from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..utils import import_matplotlib, seed_all, timeit
 
-flags.DEFINE_enum("task", None, ["mrpc"], "BERT fine-tuning task")
+flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
 flags.DEFINE_string("eval_dir", None, "evaluation directory")
 
@@ -100,8 +100,8 @@ def _main(_argv):
 
     # record results
     outfile = os.path.join(local_dir, "summary.json")
-    with open(outfile, 'w') as f:
-        json.dump(res, f, sort_keys = True, indent = 4)
+    with open(outfile, "w") as f:
+        json.dump(res, f, sort_keys=True, indent=4)
     upload = os.path.join(eval_dir, "summary.json")
     tf.gfile.Copy(outfile, upload, overwrite=True)
     log.info("uploaded dev results to {}", upload)
@@ -109,8 +109,9 @@ def _main(_argv):
     # record marginal activations
     np.save(os.path.join(local_dir, "activations.npy"), marginal)
     upload = os.path.join(eval_dir, "activations.npy")
-    tf.gfile.Copy(os.path.join(local_dir, "activations.npy"),
-                  upload, overwrite=True)
+    tf.gfile.Copy(
+        os.path.join(local_dir, "activations.npy"), upload, overwrite=True
+    )
     log.info("uploaded marginal activations to {}", upload)
 
     # generate and save plots
@@ -131,13 +132,7 @@ def _main(_argv):
         plt.semilogy(hi, ls="--", label="max", color="grey")
         plt.ylim(10 ** -3, 1)
 
-        plt.semilogy(
-            marginal,
-            ls="-",
-            color="red",
-            label="marginal",
-            lw=1,
-        )
+        plt.semilogy(marginal, ls="-", color="red", label="marginal", lw=1)
         plt.legend()
         plt.xlabel("sorted activation index")
         plt.ylabel("softmax weight")
@@ -178,7 +173,6 @@ def _main(_argv):
 
     log.info("removing work dir {}", local_dir)
     shutil.rmtree(local_dir)
-
 
 
 if __name__ == "__main__":

@@ -355,8 +355,9 @@ class BertSelfAttention(nn.Module):
             # to = to sequence length
             # query = batch x head x from x hidden
             # key = batch x head x to x hidden
-            query_layer, key_layer.transpose(-1, -2)
-        ) # batch x head x from x to
+            query_layer,
+            key_layer.transpose(-1, -2),
+        )  # batch x head x from x to
 
         attention_scores = attention_scores / math.sqrt(
             self.attention_head_size
@@ -404,7 +405,9 @@ class BertAttention(nn.Module):
         self.output = BertSelfOutput(config)
 
     def forward(self, input_tensor, attention_mask, return_attn=False):
-        self_output, attn_or_none = self.self(input_tensor, attention_mask, return_attn=return_attn)
+        self_output, attn_or_none = self.self(
+            input_tensor, attention_mask, return_attn=return_attn
+        )
         attention_output = self.output(self_output, input_tensor)
         return attention_output, attn_or_none
 
@@ -450,7 +453,9 @@ class BertLayer(nn.Module):
         self.output = BertOutput(config)
 
     def forward(self, hidden_states, attention_mask, return_attn=False):
-        attention_output, attn_or_none = self.attention(hidden_states, attention_mask, return_attn=return_attn)
+        attention_output, attn_or_none = self.attention(
+            hidden_states, attention_mask, return_attn=return_attn
+        )
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
         return layer_output, attn_or_none
@@ -465,13 +470,18 @@ class BertEncoder(nn.Module):
         )
 
     def forward(
-            self, hidden_states, attention_mask, output_all_encoded_layers=True,
-            return_attn=False
+        self,
+        hidden_states,
+        attention_mask,
+        output_all_encoded_layers=True,
+        return_attn=False,
     ):
         attn = []
         all_encoder_layers = []
         for layer_module in self.layer:
-            hidden_states, attn_or_none = layer_module(hidden_states, attention_mask, return_attn=return_attn)
+            hidden_states, attn_or_none = layer_module(
+                hidden_states, attention_mask, return_attn=return_attn
+            )
             if output_all_encoded_layers:
                 all_encoder_layers.append(hidden_states)
             if return_attn:
@@ -863,7 +873,7 @@ class BertModel(BertPreTrainedModel):
             embedding_output,
             extended_attention_mask,
             output_all_encoded_layers=output_all_encoded_layers,
-            return_attn=return_attn
+            return_attn=return_attn,
         )
         sequence_output = encoded_layers[-1]
         pooled_output = self.pooler(sequence_output)
@@ -1188,7 +1198,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
             token_type_ids,
             attention_mask,
             output_all_encoded_layers=False,
-            return_attn=return_attn
+            return_attn=return_attn,
         )
         pooled_output = return_tuple[1]
         pooled_output = self.dropout(pooled_output)
