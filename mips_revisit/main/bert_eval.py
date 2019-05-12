@@ -23,7 +23,6 @@ import tempfile
 import tensorflow as tf
 from absl import app, flags
 import numpy as np
-from scipy.special import softmax
 
 from .. import log
 from ..glue import get_glue
@@ -95,7 +94,7 @@ def _main(_argv):
     args.output_dir = os.path.join(local_dir, "output")
     args.load_dir = local_dir
 
-    res, attn = main(args, return_attn=True)
+    res, marginal, attns = main(args, return_attn=True, attn_subsample_size=64)
 
     log.info("dev results {}", res)
 
@@ -107,19 +106,15 @@ def _main(_argv):
     tf.gfile.Copy(outfile, upload, overwrite=True)
     log.info("uploaded dev results to {}", upload)
 
-    # Batch x Layer x Head x Seqlen (from) x SeqLen (to)
-    sattn = softmax(attn, -1)
-    sattn.sort()  # axis=-1, in place (can get large!)
-    marginal_attn = sattn.mean(axis=3).mean(axis=2).mean(axis=1).mean(axis=0)
-
     # record marginal activations
-    marginal_attn.save(os.path.join(local_dir, "activations.npy"))
+    np.save(os.path.join(local_dir, "activations.npy"), marginal)
     upload = os.path.join(eval_dir, "activations.npy")
     tf.gfile.Copy(os.path.join(local_dir, "activations.npy"),
                   upload, overwrite=True)
     log.info("uploaded marginal activations to {}", upload)
 
     # generate and save plots
+    # attns = Batch x Layer x Head x Seqlen (from) x SeqLen (to)
     plt = import_matplotlib()
 
     def semilogy(mat_bx):
@@ -134,7 +129,7 @@ def _main(_argv):
         plt.ylim(10 ** -3, 1)
 
         plt.semilogy(
-            marginal_attn,
+            marginal,
             ls="-",
             color="red",
             label="marginal",
@@ -148,19 +143,19 @@ def _main(_argv):
 
     outfile = os.path.join(out_dir, "layer.pdf")
     log.info("generating {}", outfile)
-    semilogy(sattn.mean(axis=3).mean(axis=2).mean(axis=0))
+    semilogy(attns.mean(axis=3).mean(axis=2).mean(axis=0))
     plt.title("attn by layer")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
 
     outfile = os.path.join(out_dir, "head.pdf")
     log.info("generating {}", outfile)
-    semilogy(sattn.mean(axis=3).mean(axis=1).mean(axis=0))
+    semilogy(attns.mean(axis=3).mean(axis=1).mean(axis=0))
     plt.title("attn by head")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
 
     outfile = os.path.join(out_dir, "from_index.pdf")
     log.info("generating {}", outfile)
-    semilogy(sattn.mean(axis=2).mean(axis=1).mean(axis=0))
+    semilogy(attns.mean(axis=2).mean(axis=1).mean(axis=0))
     plt.title("attn by from idx")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
 

@@ -25,6 +25,7 @@ import random
 import sys
 
 import numpy as np
+from scipy.special import softmax
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import f1_score, matthews_corrcoef
 
@@ -36,6 +37,7 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm.auto import tqdm, trange
 
 from .. import log
+from ..utils import OnlineSampler
 from .file_utils import (CONFIG_NAME, PYTORCH_PRETRAINED_BERT_CACHE,
                          WEIGHTS_NAME)
 from .modeling import BertConfig, BertForSequenceClassification
@@ -614,10 +616,19 @@ def compute_metrics(task_name, preds, labels):
         raise KeyError(task_name)
 
 
-def main(args, return_attn=False):
-    # returns attn matrix as
-    # (eval examples) x layer x head x from x to
-    attns = []
+def main(args, return_attn=False, attn_subsample_size=64):
+    # returns tuple (summary, marginal attn, subsampled attns)
+    #
+    # marginal attn is true average
+    # of sorted attentions by "to" index
+    #
+    # subsampled attns returns subsampled attn matrix as
+    # (subsample batch) x layer x head x from x to
+    #
+    # if return_attn is false marginal_attn and subsampled attns
+    # are null values.
+    attns = OnlineSampler(k=attn_subsample_size)
+    marginal_attn = None
     result = {}
 
     if args.server_ip and args.server_port:
@@ -874,7 +885,7 @@ def main(args, return_attn=False):
             tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
             for step, batch in enumerate(
-                tqdm(train_dataloader, desc="Iteration", mininterval=5)
+                tqdm(train_dataloader, desc="Iteration")
             ):
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, label_ids = batch
@@ -1023,7 +1034,20 @@ def main(args, return_attn=False):
                         labels=None,
                         return_attn=True,
                     )
-                    attns.append(attn)
+                    # batch x layer x head x from x to
+                    attn = attn.cpu().numpy()
+                    for ex in attn:
+                        ex = softmax(ex, -1)
+                        ex.sort(axis=-1)
+                        attns.update(ex)
+                        if marginal_attn is None:
+                            marginal_attn = ex, 1
+                        else:
+                            total, count = marginal_attn
+                            total += ex
+                            count += 1
+                            marginal_attn = total, count
+                    attn = None
                 else:
                     logits = model(
                         input_ids,
@@ -1153,8 +1177,8 @@ def main(args, return_attn=False):
             result = compute_metrics(task_name, preds, all_label_ids.numpy())
             result["loss"] = eval_loss
     if return_attn:
-        attns = [a.cpu().numpy() for a in attns]
-        attns = np.concatenate(attns, axis=0)
-        return result, attns
-    else:
-        return result
+        attns = attns.sample
+        attns = np.stack(attns, axis=0)
+        total, count = marginal_attn
+        marginal_attn = total / count
+    return result, marginal_attn, attns
