@@ -168,11 +168,11 @@ def _main(_argv):
 
     upload = os.path.join(eval_dir, "plots")
     log.info("uploading {} to {}", out_dir, upload)
-    tf.gfile.MakeDirs("plots")
+    tf.gfile.MakeDirs(upload)
     for f in eval_files:
         if not f.startswith("plots/"):
             continue
-        dst = os.path.join(upload, f)
+        dst = os.path.join(eval_dir, f)
         src = os.path.join(local_dir, f)
         tf.gfile.Copy(src, dst, overwrite=True)
 
