@@ -8,7 +8,6 @@ import subprocess
 import sys
 
 from . import log
-from .google_bert import run_classifier
 from .utils import timeit
 
 
@@ -31,7 +30,19 @@ def get_glue(task):
     glue_dir = os.path.join(data_dir, "glue_data")
     os.makedirs(glue_dir, exist_ok=True)
 
-    utask = task.upper()
+    glue_tasks = {
+        "cola": "CoLA",
+        "sst-2": "SST",
+        "mrpc": "MRPC",
+        "qqp": "QQP",
+        "sts-b": "STS",
+        "mnli": "MNLI",
+        "snli": "SNLI",
+        "qnli": "QNLI",
+        "rte": "RTE",
+        "wnli": "WNLI",
+    }
+    utask = glue_tasks[task]
 
     task_dir = os.path.join(glue_dir, utask)
 
@@ -40,15 +51,12 @@ def get_glue(task):
         return task_dir
 
     with timeit(name="load glue data for {} into {}".format(task, task_dir)):
-        return _get_glue(data_dir, glue_dir, task_dir, utask)
+        return _get_glue(data_dir, glue_dir, task_dir)
 
 
-def _get_glue(data_dir, glue_dir, task_dir, task):
+def _get_glue(data_dir, glue_dir, task_dir):
 
     glue_repo_dir = os.path.join(data_dir, "download_glue_repo")
-
-    # TODO: create a wrapper around log.debug which captures streams
-    # line-by-line to pass these along
 
     if not os.path.isdir(glue_repo_dir):
         subprocess.check_call(
@@ -67,7 +75,7 @@ def _get_glue(data_dir, glue_dir, task_dir, task):
             sys.executable,
             os.path.join(glue_repo_dir, "download_glue_data.py"),
             "--data_dir={}".format(glue_dir),
-            "--tasks={}".format(task),
+            "--tasks=all",
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

@@ -16,7 +16,6 @@ GLUE_TASK_NAMES = [
     "sts-b",
     "qqp",
     "mnli",
-    "mnli-mm",
     "qnli",
     "rte",
     "wnli",

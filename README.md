@@ -15,7 +15,9 @@ source activate mips-revisit-env
 
 Run BERT pretraining with approximate K-MIPS (default K = 10)
 ```
-python -m mips_revisit.main.bert_finetune --task mrpc --out_dir gs://bert-mips/finetune/mrpc --overwrite
+TASK=mrpc
+python -m mips_revisit.main.bert_finetune --task ${TASK} --out_dir gs://bert-mips/finetune/${TASK} --overwrite
+python -m mips_revisit.main.bert_eval --task ${TASK} --eval_dir gs://bert-mips/finetune/${TASK} --overwrite
 
 ```
 
