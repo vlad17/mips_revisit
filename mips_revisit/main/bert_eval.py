@@ -12,18 +12,18 @@ Inside $EVAL_DIR/eval, creates the following files:
 
 plots/{layer,head,from_index}.pdf - pictures of activation distribution
 activations.npy - array, indexed by "to" position, of average activations
-summary.json - succinct results overview
-
-TODO: structure of summary.json
-
+summary.json - dev set evaluation scores.
 """
 
 import os
+import json
 import shutil
 import tempfile
 
 import tensorflow as tf
 from absl import app, flags
+import numpy as np
+from scipy.special import softmax
 
 from .. import log
 from ..glue import get_glue
@@ -86,51 +86,91 @@ def _main(_argv):
     local_dir = tempfile.mkdtemp()
     log.info("work dir {}", local_dir)
 
-    local_weights = os.path.join(local_dir, "weights")
-    local_output = os.path.join(local_dir, "output")
-    os.makedirs(local_weights)
-    os.makedirs(local_output)
-
     with timeit(name="load train weights"):
         for f in train_files:
             tf.gfile.Copy(
-                os.path.join(eval_dir, f), os.path.join(local_weights, f)
+                os.path.join(eval_dir, f), os.path.join(local_dir, f)
             )
 
-    args.output_dir = local_output
-    args.load_dir = local_weights
+    args.output_dir = os.path.join(local_dir, "output")
+    args.load_dir = local_dir
 
     res, attn = main(args, return_attn=True)
 
-    log.info("{}", res)
+    log.info("dev results {}", res)
 
-    log.info("len {} shape {}", len(res), res[0])
+    # record results
+    outfile = os.path.join(local_dir, "summary.json")
+    with open(outfile, 'w') as f:
+        json.dump(res, f, sort_keys = True, indent = 4)
+    upload = os.path.join(eval_dir, "summary.json")
+    tf.gfile.Copy(outfile, upload)
+    log.info("uploaded dev results to {}", upload)
 
-    # TODO: hugging_face/minimal.py: eval
-    # do eval on train + val
-    # summary = eval(model, glue_data.train())
-    # activations, summary = eval(model, glue_data.val())
+    # Batch x Layer x Head x Seqlen (from) x SeqLen (to)
+    sattn = softmax(attn, -1)
+    sattn_sorted = np.sort(sattn)  # axis=-1
+    marginal_attn = sattn_sorted.mean(axis=3).mean(axis=2).mean(axis=1).mean(axis=0)
 
-    # make activation plots
+    # record marginal activations
+    marginal_attn.save(os.path.join(local_dir, "activations.npy"))
+    upload = os.path.join(eval_dir, "activations.npy")
+    tf.gfile.Copy(os.path.join(local_dir, "activations.npy"),
+                  upload)
+    log.info("uploaded marginal activations to {}", upload)
 
-    # summary should have acc, loss for train x test
+    # generate and save plots
+    plt = import_matplotlib()
 
-    # gfile upload (create a helper in utils using a temp directory)
+    def semilogy(mat_bx):
+        """plots b logscale curves, min max and median values"""
+        lo, med, hi = (x(mat_bx, axis=0) for x in [np.min, np.median, np.max])
+        plt.semilogy(med, ls=":", label="median", color="black", lw=2)
+        nx = mat_bx.shape[1]
+        plt.xlim(0, nx)
+        plt.fill_between(range(nx), lo, hi, color="grey", alpha=0.5)
+        plt.semilogy(lo, ls="--", label="min", color="grey")
+        plt.semilogy(hi, ls="--", label="max", color="grey")
+        plt.ylim(10 ** -3, 1)
 
-    # TODO can delete attention decay after this
+        plt.semilogy(
+            marginal_attn,
+            ls="-",
+            color="red",
+            label="marginal",
+            lw=1,
+        )
+        plt.legend()
+        plt.xlabel("sorted activation index")
+        plt.ylabel("softmax weight")
 
-    log.info("cleaning up work dir {}", local_dir)
-    s = ""
-    for root, dirs, files in os.walk(local_output):
-        level = root.replace(local_output, "").count(os.sep)
-        indent = " " * 4 * (level)
-        s += "{}{}/\n".format(indent, os.path.basename(root))
-        subindent = " " * 4 * (level + 1)
-        for f in files:
-            s += "{}{}\n".format(subindent, f)
-    log.info("output dirtree\n{}", s)
+    out_dir = os.path.join(local_dir, "plots")
 
-    # shutil.rmtree(local_dir)
+    outfile = os.path.join(out_dir, "layer.pdf")
+    log.info("generating {}", outfile)
+    semilogy(sattn_sorted.mean(axis=3).mean(axis=2).mean(axis=0))
+    plt.title("attn by layer")
+    plt.savefig(outfile, format="pdf", bbox_inches="tight")
+
+    outfile = os.path.join(out_dir, "head.pdf")
+    log.info("generating {}", outfile)
+    semilogy(sattn_sorted.mean(axis=3).mean(axis=1).mean(axis=0))
+    plt.title("attn by head")
+    plt.savefig(outfile, format="pdf", bbox_inches="tight")
+
+    outfile = os.path.join(out_dir, "from_index.pdf")
+    log.info("generating {}", outfile)
+    semilogy(sattn_sorted.mean(axis=2).mean(axis=1).mean(axis=0))
+    plt.title("attn by from idx")
+    plt.savefig(outfile, format="pdf", bbox_inches="tight")
+
+    upload = os.path.join(eval_dir, "plots")
+    log.info("uploading {} to {}", out_dir, upload)
+    tf.gfile.Copy(out_dir, upload)
+
+    log.info("removing work dir {}", local_dir)
+    shutil.rmtree(local_dir)
+
 
 
 if __name__ == "__main__":

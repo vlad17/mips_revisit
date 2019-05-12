@@ -351,8 +351,13 @@ class BertSelfAttention(nn.Module):
 
         # Take the dot product between "query" and "key" to get the raw attention scores.
         attention_scores = torch.matmul(
+            # from = from sequence length
+            # to = to sequence length
+            # query = batch x head x from x hidden
+            # key = batch x head x to x hidden
             query_layer, key_layer.transpose(-1, -2)
-        )
+        ) # batch x head x from x to
+
         attention_scores = attention_scores / math.sqrt(
             self.attention_head_size
         )
@@ -473,7 +478,9 @@ class BertEncoder(nn.Module):
                 attn.append(attn_or_none)
         if not output_all_encoded_layers:
             all_encoder_layers.append(hidden_states)
-        return all_encoder_layers, attn or None
+        # batch x layer x head x from x to
+        attn = torch.stack(attn, dim=1) if return_attn else None
+        return all_encoder_layers, attn
 
 
 class BertPooler(nn.Module):

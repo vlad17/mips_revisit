@@ -33,7 +33,7 @@ from torch.nn import CrossEntropyLoss, MSELoss
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
                               TensorDataset)
 from torch.utils.data.distributed import DistributedSampler
-from tqdm.autonotebook import tqdm, trange
+from tqdm.auto import tqdm, trange
 
 from .. import log
 from .file_utils import (CONFIG_NAME, PYTORCH_PRETRAINED_BERT_CACHE,
@@ -615,6 +615,10 @@ def compute_metrics(task_name, preds, labels):
 
 
 def main(args, return_attn=False):
+    # returns attn matrix as
+    # (eval examples) x layer x head x from x to
+    attns = []
+    result = {}
 
     if args.server_ip and args.server_port:
         # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
@@ -870,7 +874,7 @@ def main(args, return_attn=False):
             tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
             for step, batch in enumerate(
-                tqdm(train_dataloader, desc="Iteration")
+                tqdm(train_dataloader, desc="Iteration", mininterval=5)
             ):
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, label_ids = batch
@@ -1001,7 +1005,6 @@ def main(args, return_attn=False):
         nb_eval_steps = 0
         preds = []
 
-        attns = []
 
         for input_ids, input_mask, segment_ids, label_ids in tqdm(
             eval_dataloader, desc="Evaluating"
@@ -1056,18 +1059,8 @@ def main(args, return_attn=False):
         elif output_mode == "regression":
             preds = np.squeeze(preds)
         result = compute_metrics(task_name, preds, all_label_ids.numpy())
-        loss = tr_loss / global_step if args.do_train else None
 
         result["eval_loss"] = eval_loss
-        result["global_step"] = global_step
-        result["loss"] = loss
-
-        output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
-        with open(output_eval_file, "w") as writer:
-            logger.info("***** Eval results *****")
-            for key in sorted(result.keys()):
-                logger.info("  %s = %s", key, str(result[key]))
-                writer.write("%s = %s\n" % (key, str(result[key])))
 
         # hack for MNLI-MM
         if task_name == "mnli":
@@ -1158,21 +1151,10 @@ def main(args, return_attn=False):
             preds = preds[0]
             preds = np.argmax(preds, axis=1)
             result = compute_metrics(task_name, preds, all_label_ids.numpy())
-            loss = tr_loss / global_step if args.do_train else None
-
-            result["eval_loss"] = eval_loss
-            result["global_step"] = global_step
-            result["loss"] = loss
-
-            output_eval_file = os.path.join(
-                args.output_dir + "-MM", "eval_results.txt"
-            )
-            with open(output_eval_file, "w") as writer:
-                logger.info("***** Eval results *****")
-                for key in sorted(result.keys()):
-                    logger.info("  {} = {}", key, str(result[key]))
-                    writer.write("%s = %s\n" % (key, str(result[key])))
+            result["loss"] = eval_loss
     if return_attn:
+        attns = [a.cpu().numpy() for a in attns]
+        attns = np.concatenate(attns, axis=0)
         return result, attns
     else:
         return result
