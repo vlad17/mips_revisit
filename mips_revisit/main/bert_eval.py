@@ -104,19 +104,19 @@ def _main(_argv):
     with open(outfile, 'w') as f:
         json.dump(res, f, sort_keys = True, indent = 4)
     upload = os.path.join(eval_dir, "summary.json")
-    tf.gfile.Copy(outfile, upload)
+    tf.gfile.Copy(outfile, upload, overwrite=True)
     log.info("uploaded dev results to {}", upload)
 
     # Batch x Layer x Head x Seqlen (from) x SeqLen (to)
     sattn = softmax(attn, -1)
-    sattn_sorted = np.sort(sattn)  # axis=-1
-    marginal_attn = sattn_sorted.mean(axis=3).mean(axis=2).mean(axis=1).mean(axis=0)
+    sattn.sort()  # axis=-1, in place (can get large!)
+    marginal_attn = sattn.mean(axis=3).mean(axis=2).mean(axis=1).mean(axis=0)
 
     # record marginal activations
     marginal_attn.save(os.path.join(local_dir, "activations.npy"))
     upload = os.path.join(eval_dir, "activations.npy")
     tf.gfile.Copy(os.path.join(local_dir, "activations.npy"),
-                  upload)
+                  upload, overwrite=True)
     log.info("uploaded marginal activations to {}", upload)
 
     # generate and save plots
@@ -148,25 +148,25 @@ def _main(_argv):
 
     outfile = os.path.join(out_dir, "layer.pdf")
     log.info("generating {}", outfile)
-    semilogy(sattn_sorted.mean(axis=3).mean(axis=2).mean(axis=0))
+    semilogy(sattn.mean(axis=3).mean(axis=2).mean(axis=0))
     plt.title("attn by layer")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
 
     outfile = os.path.join(out_dir, "head.pdf")
     log.info("generating {}", outfile)
-    semilogy(sattn_sorted.mean(axis=3).mean(axis=1).mean(axis=0))
+    semilogy(sattn.mean(axis=3).mean(axis=1).mean(axis=0))
     plt.title("attn by head")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
 
     outfile = os.path.join(out_dir, "from_index.pdf")
     log.info("generating {}", outfile)
-    semilogy(sattn_sorted.mean(axis=2).mean(axis=1).mean(axis=0))
+    semilogy(sattn.mean(axis=2).mean(axis=1).mean(axis=0))
     plt.title("attn by from idx")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
 
     upload = os.path.join(eval_dir, "plots")
     log.info("uploading {} to {}", out_dir, upload)
-    tf.gfile.Copy(out_dir, upload)
+    tf.gfile.Copy(out_dir, upload, overwrite=True)
 
     log.info("removing work dir {}", local_dir)
     shutil.rmtree(local_dir)
