@@ -165,7 +165,13 @@ def _main(_argv):
 
     upload = os.path.join(eval_dir, "plots")
     log.info("uploading {} to {}", out_dir, upload)
-    tf.gfile.Copy(out_dir, upload, overwrite=True)
+    tf.gfile.MakeDirs("plots")
+    for f in eval_files:
+        if not f.startswith("plots/"):
+            continue
+        dst = os.path.join(upload, f)
+        src = os.path.join(local_dir, f)
+        tf.gfile.Copy(src, dst, overwrite=True)
 
     log.info("removing work dir {}", local_dir)
     shutil.rmtree(local_dir)
