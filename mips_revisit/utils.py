@@ -12,6 +12,8 @@ from contextlib import contextmanager
 import numpy as np
 import tensorflow as tf
 
+import torch
+
 from . import log
 
 
@@ -75,7 +77,9 @@ def seed_all(seed):
     independently."""
     log.debug("seeding with seed {}", seed)
     np.random.seed(seed)
-    rand_seed, tf_seed = _next_seeds(2)
+    rand_seed, tf_seed, torch_cpu_seed, torch_gpu_seed = _next_seeds(4)
+    torch.manual_seed(torch_cpu_seed)
+    torch.cuda.manual_seed_all(torch_gpu_seed)
     random.seed(rand_seed)
     tf.random.set_random_seed(tf_seed)
 

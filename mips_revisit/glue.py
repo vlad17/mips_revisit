@@ -7,9 +7,9 @@ import os
 import subprocess
 import sys
 
-from . import run_classifier
-from .. import log
-from ..utils import timeit
+from . import log
+from .utils import timeit
+from .google_bert import run_classifier
 
 
 def get_glue(task):
@@ -18,17 +18,12 @@ def get_glue(task):
     into local ./data folder if it's not
     there already. Only checks if the directory is present.
 
-    Returns a "Processor" for the given task, which is just
-    an object with:
+    EXPECTS
+    task, a GLUE task string, one of
+    mrpc, cola, xnli, mnli
 
-    .bound_data_dir -- where the data's stored
-    .train() -- get all train examples
-    .val() -- validation
-    .test() -- test
-
-    Each of those is a list of
-    mips_revisit.bert.run_classifier.InputExample
-    instances.
+    RETURNS
+    the directory containing the task's GLUE data.
     """
     data_dir = os.path.join(os.getcwd(), "data")
     os.makedirs(data_dir, exist_ok=True)
@@ -42,7 +37,7 @@ def get_glue(task):
 
     if os.path.isdir(task_dir):
         log.info("glue data for task {} already present in {}", task, task_dir)
-        return _get_processor(utask, task_dir)
+        return task_dir
 
     with timeit(name="load glue data for {} into {}".format(task, task_dir)):
         return _get_glue(data_dir, glue_dir, task_dir, utask)
@@ -78,16 +73,4 @@ def _get_glue(data_dir, glue_dir, task_dir, task):
         stderr=subprocess.DEVNULL,
     )
 
-    return _get_processor(task, task_dir)
-
-
-def _get_processor(task, task_dir):
-    processors = {
-        "cola": run_classifier.ColaProcessor,
-        "mnli": run_classifier.MnliProcessor,
-        "mrpc": run_classifier.MrpcProcessor,
-        "xnli": run_classifier.XnliProcessor,
-    }
-    processor = processors[task.lower()]()
-    processor.bound_data_dir = task_dir
-    return processor
+    return task_dir

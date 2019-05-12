@@ -1,169 +1,95 @@
 """
-Usage: python -m mips_revisit.main.bert_finetune --task mrpc --ckpt_dir gs://bert-mips/finetune --overwrite
+Usage: python -m mips_revisit.main.bert_finetune --task mrpc --out_dir gs://bert-mips/finetune/mrpc --overwrite
 
-Given a task TASK and checkpoint directory CKPT_DIR, this file, when run,
+Given a task and output directory OUT_DIR, this file, when run,
 performs the following:
 
 * Pull in a pre-trained cased BERT base model.
 * Fine-tunes the model to the task using the parameters in the paper.
 
-We use early stopping on the validation set.
-
-Inside $CKPT_DIR/$TASK, creates checkpoints.
-
-If $CKPT_DIR/$TASK exists, this does not do anything unless --overwrite is
+If $OUT_DIR exists, this does not do anything unless --overwrite is
 specified.
+
+Inside $OUT_DIR, creates the following files:
+
+config.json - BERT model configuration params
+pytorch_model.bin - binary pytorch state dict tuned classification BERT
+vocab.txt - tokens used by the model
 """
 
-import logging
 import os
+import shutil
 
 import tensorflow as tf
 from absl import app, flags
 
 from .. import log
-from ..bert.finetune_data import get_glue
+from ..glue import get_glue
+from ..huggingface.run_classifier import main
+from ..params import bert_glue_params
 from ..tpu_setup import colab_env, make_tpu_estimator
 from ..utils import import_matplotlib, seed_all
 
 flags.DEFINE_enum("task", None, ["mrpc"], "BERT fine-tuning task")
 
-flags.DEFINE_string("ckpt_dir", None, "checkpoint directory")
+flags.DEFINE_string("out_dir", None, "checkpoint directory")
 
 flags.DEFINE_bool("overwrite", False, "overwrite previous directory")
 
 
-class TrainFilter(logging.Filter):
-    def filter(self, record):
-        if "tpu_estimator.py" in record.pathname:
-            msg = record.getMessage()
-            return (
-                "Initialized TPU in" in msg or
-                "Enqueue next" in msg or
-                "Dequeue next" in msg or
-                "Shutdown TPU system" in msg)
-        return "basic_session_run_hooks" in record.pathname
-
-
 def _main(_argv):
     log.init()
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-    if type(tf.contrib) != type(tf):
-        tf.contrib._warning = None
-    logging.getLogger("tensorflow").addFilter(TrainFilter())
-    # tf.logging.set_verbosity(tf.logging.ERROR)
 
-    ckpt_dir = os.path.join(flags.FLAGS.ckpt_dir, flags.FLAGS.task)
-    if tf.gfile.Exists(ckpt_dir) and not flags.FLAGS.overwrite:
-        log.info("checkpoint directory {} already exists, exiting", ckpt_dir)
+    out_dir = flags.FLAGS.out_dir
+    if tf.gfile.Exists(out_dir) and not flags.FLAGS.overwrite:
+        log.info("output directory {} already exists, exiting", out_dir)
         return
-    elif tf.gfile.Exists(ckpt_dir) and flags.FLAGS.overwrite:
-        log.info("checkpoint directory {} exists, deleting", ckpt_dir)
-        tf.gfile.DeleteRecursively(flags.FLAGS.ckpt_dir)
+    elif tf.gfile.Exists(out_dir) and flags.FLAGS.overwrite:
+        log.info("output directory {} exists, will overwrite", out_dir)
 
     glue_data = get_glue(flags.FLAGS.task)
-    tpu_addr, num_tpu_cores = colab_env()
-
     seed_all(1234)
 
-    tf.gfile.MakeDirs(ckpt_dir)
+    args = bert_glue_params(flags.FLAGS.task)
+    args.data_dir = glue_data
 
-    from ..params import bert_pretrain_params, bert_task_fine_tuning_params
-    from ..bert import run_classifier, modeling
-    from ..bert import tokenization
-
-    task_params = bert_task_fine_tuning_params(flags.FLAGS.task)
-    bert_model = "cased_L-12_H-768_A-12"
-    train_examples = glue_data.train()
-    pretrain_params = bert_pretrain_params(bert_model)
-    max_seq_length = task_params["max_seq_length"]
-    batch_sizes = task_params["batch_sizes"]
-    steps_per_epoch = (len(train_examples) // batch_sizes.train) + 1
-    num_train_steps = task_params["max_epochs"] * steps_per_epoch
-    num_warmup_steps = int(num_train_steps * task_params["warmup_proportion"])
-    model_fn = run_classifier.model_fn_builder(
-        bert_config=modeling.BertConfig.from_json_file(
-            pretrain_params["config_file"]
-        ),
-        num_labels=len(glue_data.get_labels()),
-        init_checkpoint=pretrain_params["init_checkpoint"],
-        learning_rate=task_params["base_lr"],
-        num_train_steps=num_train_steps,
-        num_warmup_steps=num_warmup_steps,
-        use_tpu=True,
-        use_one_hot_embeddings=True,
+    local_dir = os.path.join(os.getcwd(), "generated", flags.FLAGS.task)
+    log.info(
+        "using dir {} for local weights (final weights will be in {})",
+        local_dir,
+        out_dir,
     )
+    if os.path.exists(local_dir):
+        shutil.rmtree(local_dir)
+    os.makedirs(local_dir, exist_ok=True)
 
-    estimator_from_checkpoints = make_tpu_estimator(
-        ckpt_dir=ckpt_dir,
-        tpu_addr=tpu_addr,
-        num_tpu_cores=num_tpu_cores,
-        model_fn=model_fn,
-        batch_sizes=batch_sizes,
-        save_checkpoints_steps=steps_per_epoch,  # checkpoint = epoch
-    )
+    args.output_dir = local_dir
+    args.cache_dir = "/tmp/bert_cache"
+    args.load_dir = None
+    args.do_train = True
+    args.do_eval = False
+    args.no_cuda = False
+    args.local_rank = -1
 
-    tokenizer = tokenization.FullTokenizer(
-        pretrain_params["tokens"], pretrain_params["is_cased"]
-    )
+    # inferrable from GPU mem?
+    args.gradient_accumulation_steps = 1
+    args.fp16 = False
+    args.loss_scale = 0
 
-    log.info("beginning training")
-    log.info("num training examples = {}", len(train_examples))
-    log.info("batch size = {}", batch_sizes.train)
-    log.info("max epochs = {}", task_params["max_epochs"])
+    # might be useful later
+    args.server_ip = ""
+    args.server_port = ""
 
-    train_features = run_classifier.convert_examples_to_features(
-        train_examples, glue_data.get_labels(), max_seq_length, tokenizer
-    )
-    train_input_fn = run_classifier.input_fn_builder(
-        features=train_features,
-        seq_length=max_seq_length,
-        is_training=True,
-        drop_remainder=True,
-    )
+    main(args)
 
-    eval_examples = glue_data.val()
-    eval_features = run_classifier.convert_examples_to_features(
-        eval_examples, glue_data.get_labels(), max_seq_length, tokenizer
-    )
-    eval_input_fn = run_classifier.input_fn_builder(
-        features=eval_features,
-        seq_length=max_seq_length,
-        is_training=False,
-        drop_remainder=True,
-    )
+    expected_files = ["pytorch_model.bin", "config.json", "vocab.txt"]
+    for f in expected_files:
+        src = os.path.join(local_dir, f)
+        dst = os.path.join(out_dir, f)
+        tf.gfile.Copy(src, dst, overwrite=True)
 
-    # the "right" way to do this is to use train_and_evaluate,
-    # add a loss summary to the host_call_fn in TPUEstimatorSpec
-    # generated by run_classifier's model_fn_builder as done here
-    # https://github.com/tensorflow/tpu/blob/master/models/official/resnet/resnet_main.py
-    #
-    # Next, we'd need to use the stop_if_no_decrease_hook
-    # https://www.tensorflow.org/api_docs/python/tf/contrib/estimator/stop_if_no_decrease_hook
-    # which relies on exports in tf.estimator.LatestExporter (keep all)
-    #
-    # At the end we could save the train/val losses extracted into summary.json
-    losses = []
-    for epoch in range(task_params["max_epochs"]):
-        estimator_from_checkpoints.train(
-            input_fn=train_input_fn, steps=steps_per_epoch
-        )
-        # should instead be using train_and_evaluate
-        # with save_every_secs = 0 so that eval runs every checkpoint.
-        stats = estimator_from_checkpoints.evaluate(
-            input_fn=eval_input_fn,
-            steps=(len(eval_examples) // batch_sizes.eval)
-        )
-        log.info(
-            "epoch {:3d}/{:3d} val acc {:7.5f} val loss {:7.5f}",
-            epoch,
-            task_params["max_epochs"],
-            stats["eval_accuracy"],
-            stats["eval_loss"],
-        )
-        losses.append(stats["eval_loss"])
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("task")
-    flags.mark_flag_as_required("ckpt_dir")
+    flags.mark_flag_as_required("out_dir")
     app.run(_main)

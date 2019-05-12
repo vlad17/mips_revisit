@@ -7,39 +7,45 @@ This file also contains the fixed parameters used by previous paper
 for various different tasks.
 """
 
+import argparse
 
-class TEP:
+
+def bert_glue_params(task):
     """
-    Any parameter that depends on whether we're training,
-    evaluation, or prediction stages can be an instance of this.
+    Transcribed from the paper.
+
+    https://arxiv.org/pdf/1810.04805.pdf
+
+    Uses base, not large
+
+    EXPECTS
+    task, the GLUE task string
+
+    RETURNS
+    an argparse namespace of params used for fine tuning
+    pre-trained BERT models on each given task.
     """
+    if task == "NER":
+        # only this is cased
+        bert_model = "bert-base-cased"
+        is_lower = False
+    else:
+        bert_model = "bert-base-uncased"
+        is_lower = True
 
-    def __init__(self, train=None, eval=None, predict=None):
-        self.train = train
-        self.eval = eval
-        self.predict = predict
+    args = argparse.Namespace()
+    args.bert_model = bert_model
+    args.task_name = task
 
-
-# params for the pre-trained model
-def bert_pretrain_params(bert_model):
-    pretrain_dir = "gs://cloud-tpu-checkpoints/bert/" + bert_model
-    return {
-        "pretrain_dir": pretrain_dir,
-        "config_file": pretrain_dir + "/bert_config.json",
-        "init_checkpoint": pretrain_dir + "/bert_model.ckpt",
-        "tokens": pretrain_dir + "/vocab.txt",
-        "is_cased": "uncased" not in bert_model,
-    }
-
-
-# fine-tuning params
-def bert_task_fine_tuning_params(task):
     if task == "mrpc":
-        return {
-            "batch_sizes": TEP(32, 8, 8),
-            "base_lr": 2e-5,
-            "max_epochs": 3,
-            "max_seq_length": 128,
-            "warmup_proportion": 0.1,
-        }
-    raise ValueError("unknown task " + task)
+        args.max_seq_length = 128
+        args.do_lower_case = is_lower
+        args.train_batch_size = 32
+        args.eval_batch_size = 8
+        args.learning_rate = 2e-5
+        args.num_train_epochs = 3
+        args.warmup_proportion = 0.1
+    else:
+        raise ValueError("unknown task " + task)
+
+    return args
