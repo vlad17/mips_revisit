@@ -72,13 +72,15 @@ _FORMAT_STRING = "[{fmttime} {pathname}:{lineno}] %(message)s"
 _FORMATTER = _StackCrawlingFormatter(_FORMAT_STRING)
 
 
-def init():
-    """Initialize the logger."""
+def init(verbose=None):
+    """Initialize the logger (uses flag value by default)"""
     handler = logging.StreamHandler()
     handler.setFormatter(_FORMATTER)
     _LOGGER.propagate = False
     _LOGGER.addHandler(handler)
-    if flags.FLAGS.verbose:
+    if verbose is None:
+        verbose = flags.FLAGS.verbose
+    if verbose:
         _LOGGER.setLevel(logging.DEBUG)
     else:
         _LOGGER.setLevel(logging.INFO)

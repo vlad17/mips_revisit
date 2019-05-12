@@ -1,6 +1,6 @@
 """setup.py for mips_revisit"""
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(name="mips_revisit", author="Vladimir Feinberg",
-      install_requires=[])
+      packages=find_packages())

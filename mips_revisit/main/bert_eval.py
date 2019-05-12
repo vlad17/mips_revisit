@@ -104,7 +104,7 @@ def _main(_argv):
 
     log.info("{}", res)
 
-    log.info("len {}, {} shape {}", len(res), len(res[0]), res[0][0].shape)
+    log.info("len {} shape {}", len(res), res[0])
 
     # TODO: hugging_face/minimal.py: eval
     # do eval on train + val
