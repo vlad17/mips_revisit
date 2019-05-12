@@ -340,7 +340,7 @@ class BertSelfAttention(nn.Module):
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
-    def forward(self, hidden_states, attention_mask):
+    def forward(self, hidden_states, attention_mask, return_attn=False):
         mixed_query_layer = self.query(hidden_states)
         mixed_key_layer = self.key(hidden_states)
         mixed_value_layer = self.value(hidden_states)
@@ -357,6 +357,7 @@ class BertSelfAttention(nn.Module):
             self.attention_head_size
         )
         # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
+        unmasked = attention_scores if return_attn else None
         attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
@@ -372,7 +373,7 @@ class BertSelfAttention(nn.Module):
             self.all_head_size,
         )
         context_layer = context_layer.view(*new_context_layer_shape)
-        return context_layer
+        return context_layer, unmasked
 
 
 class BertSelfOutput(nn.Module):
@@ -397,10 +398,10 @@ class BertAttention(nn.Module):
         self.self = BertSelfAttention(config)
         self.output = BertSelfOutput(config)
 
-    def forward(self, input_tensor, attention_mask):
-        self_output = self.self(input_tensor, attention_mask)
+    def forward(self, input_tensor, attention_mask, return_attn=False):
+        self_output, attn_or_none = self.self(input_tensor, attention_mask, return_attn=return_attn)
         attention_output = self.output(self_output, input_tensor)
-        return attention_output
+        return attention_output, attn_or_none
 
 
 class BertIntermediate(nn.Module):
@@ -443,11 +444,11 @@ class BertLayer(nn.Module):
         self.intermediate = BertIntermediate(config)
         self.output = BertOutput(config)
 
-    def forward(self, hidden_states, attention_mask):
-        attention_output = self.attention(hidden_states, attention_mask)
+    def forward(self, hidden_states, attention_mask, return_attn=False):
+        attention_output, attn_or_none = self.attention(hidden_states, attention_mask, return_attn=return_attn)
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
-        return layer_output
+        return layer_output, attn_or_none
 
 
 class BertEncoder(nn.Module):
@@ -459,16 +460,20 @@ class BertEncoder(nn.Module):
         )
 
     def forward(
-        self, hidden_states, attention_mask, output_all_encoded_layers=True
+            self, hidden_states, attention_mask, output_all_encoded_layers=True,
+            return_attn=False
     ):
+        attn = []
         all_encoder_layers = []
         for layer_module in self.layer:
-            hidden_states = layer_module(hidden_states, attention_mask)
+            hidden_states, attn_or_none = layer_module(hidden_states, attention_mask, return_attn=return_attn)
             if output_all_encoded_layers:
                 all_encoder_layers.append(hidden_states)
+            if return_attn:
+                attn.append(attn_or_none)
         if not output_all_encoded_layers:
             all_encoder_layers.append(hidden_states)
-        return all_encoder_layers
+        return all_encoder_layers, attn or None
 
 
 class BertPooler(nn.Module):
@@ -822,6 +827,7 @@ class BertModel(BertPreTrainedModel):
         token_type_ids=None,
         attention_mask=None,
         output_all_encoded_layers=True,
+        return_attn=False,
     ):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
@@ -846,16 +852,20 @@ class BertModel(BertPreTrainedModel):
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
         embedding_output = self.embeddings(input_ids, token_type_ids)
-        encoded_layers = self.encoder(
+        encoded_layers, attns = self.encoder(
             embedding_output,
             extended_attention_mask,
             output_all_encoded_layers=output_all_encoded_layers,
+            return_attn=return_attn
         )
         sequence_output = encoded_layers[-1]
         pooled_output = self.pooler(sequence_output)
         if not output_all_encoded_layers:
             encoded_layers = encoded_layers[-1]
-        return encoded_layers, pooled_output
+        if return_attn:
+            return encoded_layers, pooled_output, attns
+        else:
+            return encoded_layers, pooled_output
 
 
 class BertForPreTraining(BertPreTrainedModel):
@@ -1159,23 +1169,36 @@ class BertForSequenceClassification(BertPreTrainedModel):
         self.apply(self.init_bert_weights)
 
     def forward(
-        self, input_ids, token_type_ids=None, attention_mask=None, labels=None
+        self,
+        input_ids,
+        token_type_ids=None,
+        attention_mask=None,
+        labels=None,
+        return_attn=False,
     ):
-        _, pooled_output = self.bert(
+        return_tuple = self.bert(
             input_ids,
             token_type_ids,
             attention_mask,
             output_all_encoded_layers=False,
+            return_attn=return_attn
         )
+        pooled_output = return_tuple[1]
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
 
         if labels is not None:
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-            return loss
+            return self._wrap_return(loss, return_tuple[2:])
         else:
-            return logits
+            return self._wrap_return(logits, return_tuple[2:])
+
+    def _wrap_return(self, x, tup):
+        """If tuple is nonempty, returns (x, tup[0]) else x"""
+        if tup:
+            return (x, tup[0])
+        return x
 
 
 class BertForMultipleChoice(BertPreTrainedModel):

@@ -26,7 +26,7 @@ import tensorflow as tf
 from absl import app, flags
 
 from .. import log
-from ..finetune_data import get_glue
+from ..glue import get_glue
 from ..huggingface.run_classifier import main
 from ..params import bert_glue_params
 from ..utils import import_matplotlib, seed_all, timeit
@@ -77,6 +77,11 @@ def _main(_argv):
     args.do_eval = True
     args.no_cuda = False
     args.local_rank = -1
+    args.gradient_accumulation_steps = 1  # inferrable from GPU mem?
+    args.fp16 = False
+    args.loss_scale = 0
+    args.server_ip = ""
+    args.server_port = ""
 
     local_dir = tempfile.mkdtemp()
     log.info("work dir {}", local_dir)
@@ -95,7 +100,11 @@ def _main(_argv):
     args.output_dir = local_output
     args.load_dir = local_weights
 
-    main(args)
+    res, attn = main(args, return_attn=True)
+
+    log.info("{}", res)
+
+    log.info("len {}, {} shape {}", len(res), len(res[0]), res[0][0].shape)
 
     # TODO: hugging_face/minimal.py: eval
     # do eval on train + val
@@ -111,10 +120,20 @@ def _main(_argv):
     # TODO can delete attention decay after this
 
     log.info("cleaning up work dir {}", local_dir)
+    s = ""
+    for root, dirs, files in os.walk(local_output):
+        level = root.replace(local_output, "").count(os.sep)
+        indent = " " * 4 * (level)
+        s += "{}{}/\n".format(indent, os.path.basename(root))
+        subindent = " " * 4 * (level + 1)
+        for f in files:
+            s += "{}{}\n".format(subindent, f)
+    log.info("output dirtree\n{}", s)
+
     # shutil.rmtree(local_dir)
 
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("task")
-    flags.mark_flag_as_required("out_dir")
+    flags.mark_flag_as_required("eval_dir")
     app.run(_main)

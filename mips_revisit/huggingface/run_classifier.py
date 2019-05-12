@@ -614,7 +614,7 @@ def compute_metrics(task_name, preds, labels):
         raise KeyError(task_name)
 
 
-def main(args):
+def main(args, return_attn=False):
 
     if args.server_ip and args.server_port:
         # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
@@ -832,9 +832,9 @@ def main(args):
             output_mode,
         )
         logger.info("***** Running training *****")
-        logger.info("  Num examples = %d", len(train_examples))
-        logger.info("  Batch size = %d", args.train_batch_size)
-        logger.info("  Num steps = %d", num_train_optimization_steps)
+        logger.info("  Num examples = {}", len(train_examples))
+        logger.info("  Batch size = {}", args.train_batch_size)
+        logger.info("  Num steps = {}", num_train_optimization_steps)
         all_input_ids = torch.tensor(
             [f.input_ids for f in train_features], dtype=torch.long
         )
@@ -966,8 +966,8 @@ def main(args):
             output_mode,
         )
         logger.info("***** Running evaluation *****")
-        logger.info("  Num examples = %d", len(eval_examples))
-        logger.info("  Batch size = %d", args.eval_batch_size)
+        logger.info("  Num examples = {}", len(eval_examples))
+        logger.info("  Batch size = {}", args.eval_batch_size)
         all_input_ids = torch.tensor(
             [f.input_ids for f in eval_features], dtype=torch.long
         )
@@ -1001,6 +1001,8 @@ def main(args):
         nb_eval_steps = 0
         preds = []
 
+        attns = []
+
         for input_ids, input_mask, segment_ids, label_ids in tqdm(
             eval_dataloader, desc="Evaluating"
         ):
@@ -1010,7 +1012,23 @@ def main(args):
             label_ids = label_ids.to(device)
 
             with torch.no_grad():
-                logits = model(input_ids, segment_ids, input_mask, labels=None)
+                if return_attn:
+                    logits, attn = model(
+                        input_ids,
+                        segment_ids,
+                        input_mask,
+                        labels=None,
+                        return_attn=True,
+                    )
+                    attns.append(attn)
+                else:
+                    logits = model(
+                        input_ids,
+                        segment_ids,
+                        input_mask,
+                        labels=None,
+                        return_attn=False,
+                    )
 
             # create eval loss and other metric required by the task
             if output_mode == "classification":
@@ -1078,8 +1096,8 @@ def main(args):
                 output_mode,
             )
             logger.info("***** Running evaluation *****")
-            logger.info("  Num examples = %d", len(eval_examples))
-            logger.info("  Batch size = %d", args.eval_batch_size)
+            logger.info("  Num examples = {}", len(eval_examples))
+            logger.info("  Batch size = {}", args.eval_batch_size)
             all_input_ids = torch.tensor(
                 [f.input_ids for f in eval_features], dtype=torch.long
             )
@@ -1152,5 +1170,9 @@ def main(args):
             with open(output_eval_file, "w") as writer:
                 logger.info("***** Eval results *****")
                 for key in sorted(result.keys()):
-                    logger.info("  %s = %s", key, str(result[key]))
+                    logger.info("  {} = {}", key, str(result[key]))
                     writer.write("%s = %s\n" % (key, str(result[key])))
+    if return_attn:
+        return result, attns
+    else:
+        return result
