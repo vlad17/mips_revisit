@@ -150,18 +150,21 @@ def _main(_argv):
     semilogy(attns.mean(axis=3).mean(axis=2).mean(axis=0))
     plt.title("attn by layer")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
+    plt.clf()
 
     outfile = os.path.join(out_dir, "head.pdf")
     log.info("generating {}", outfile)
     semilogy(attns.mean(axis=3).mean(axis=1).mean(axis=0))
     plt.title("attn by head")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
+    plt.clf()
 
     outfile = os.path.join(out_dir, "from_index.pdf")
     log.info("generating {}", outfile)
     semilogy(attns.mean(axis=2).mean(axis=1).mean(axis=0))
     plt.title("attn by from idx")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
+    plt.clf()
 
     upload = os.path.join(eval_dir, "plots")
     log.info("uploading {} to {}", out_dir, upload)
