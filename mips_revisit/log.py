@@ -1,4 +1,6 @@
 """
+This code used to be Michael Whittaker's, but I've adapted it since.
+
 Imagine you want to log stuff in multiple files of a Python project. You'd
 probably write some code that looks like this:
 
@@ -104,6 +106,24 @@ def info(s, *args):
     """info(s, x1, ..., xn) logs s.format(x1, ..., xn)."""
     _prep_formatter()
     _LOGGER.info(s.format(*args))
+
+
+def warn(s, *args):
+    """warn(s, x1, ..., xn) logs s.format(x1, ..., xn)."""
+    _prep_formatter()
+    _LOGGER.warn(s.format(*args))
+
+
+def error(s, *args):
+    """error(s, x1, ..., xn) logs s.format(x1, ..., xn)."""
+    _prep_formatter()
+    _LOGGER.error(s.format(*args))
+
+
+def fatal(s, *args):
+    """fatal(s, x1, ..., xn) logs s.format(x1, ..., xn)."""
+    _prep_formatter()
+    _LOGGER.fatal(s.format(*args))
 
 
 def _clean_path(path):

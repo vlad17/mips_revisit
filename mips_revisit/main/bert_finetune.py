@@ -7,9 +7,6 @@ performs the following:
 * Pull in a pre-trained cased BERT base model.
 * Fine-tunes the model to the task using the parameters in the paper.
 
-If $OUT_DIR exists, this does not do anything unless --overwrite is
-specified.
-
 Inside $OUT_DIR, creates the following files:
 
 config.json - BERT model configuration params
@@ -27,25 +24,29 @@ from .. import log
 from ..glue import get_glue
 from ..huggingface.run_classifier import main
 from ..params import bert_glue_params
-from ..tpu_setup import colab_env, make_tpu_estimator
-from ..utils import import_matplotlib, seed_all
+from ..utils import seed_all
 
 flags.DEFINE_enum("task", None, ["mrpc"], "BERT fine-tuning task")
 
-flags.DEFINE_string("out_dir", None, "checkpoint directory")
+flags.DEFINE_string("out_dir", None, "checkpoint output directory")
 
-flags.DEFINE_bool("overwrite", False, "overwrite previous directory")
+flags.DEFINE_bool("overwrite", False, "overwrite previous directory files")
 
 
 def _main(_argv):
     log.init()
 
     out_dir = flags.FLAGS.out_dir
-    if tf.gfile.Exists(out_dir) and not flags.FLAGS.overwrite:
-        log.info("output directory {} already exists, exiting", out_dir)
-        return
-    elif tf.gfile.Exists(out_dir) and flags.FLAGS.overwrite:
-        log.info("output directory {} exists, will overwrite", out_dir)
+    expected_files = ["pytorch_model.bin", "config.json", "vocab.txt"]
+    for f in expected_files:
+        f = os.path.join(flags.FLAGS.out_dir, f)
+        if tf.gfile.Exists(f) and not flags.FLAGS.overwrite:
+            log.info(
+                "file {} exists and would be overwritten, but "
+                "--overwrite not specified",
+                f,
+            )
+            return
 
     glue_data = get_glue(flags.FLAGS.task)
     seed_all(1234)
@@ -82,7 +83,7 @@ def _main(_argv):
 
     main(args)
 
-    expected_files = ["pytorch_model.bin", "config.json", "vocab.txt"]
+    tf.gfile.MakeDirs(out_dir)
     for f in expected_files:
         src = os.path.join(local_dir, f)
         dst = os.path.join(out_dir, f)

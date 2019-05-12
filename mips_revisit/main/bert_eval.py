@@ -1,17 +1,14 @@
 """
-Usage: python -m mips_revisit.main.bert_eval --task mrpc --out_dir gs://bert-mips/finetune/mrpc --overwrite
+Usage: python -m mips_revisit.main.bert_eval --task mrpc --eval_dir gs://bert-mips/finetune/mrpc --overwrite
 
-Given a task and output directory OUT_DIR, this file, when run,
+Given a task and evaluation directory EVAL_DIR, this file, when run,
 performs the following:
 
-* Attempt to load the model in $OUT_DIR, which should have been saved there
+* Attempt to load the model in $EVAL_DIR, which should have been saved there
   by mips_revisit.main.bert_train
 * Evaluate the model on the dev set
 
-If $OUT_DIR/eval exists, this does not do anything unless --overwrite is
-specified.
-
-Inside $OUT_DIR/eval, creates the following files:
+Inside $EVAL_DIR/eval, creates the following files:
 
 plots/{layer,head,from_index}.pdf - pictures of activation distribution
 activations.npy - array, indexed by "to" position, of average activations
@@ -22,47 +19,83 @@ TODO: structure of summary.json
 """
 
 import os
+import shutil
+import tempfile
 
 import tensorflow as tf
 from absl import app, flags
 
 from .. import log
-from ..bert.finetune_data import get_glue
-from ..tpu_setup import colab_env, make_tpu_estimator
-from ..utils import import_matplotlib, seed_all
+from ..finetune_data import get_glue
+from ..huggingface.run_classifier import main
+from ..params import bert_glue_params
+from ..utils import import_matplotlib, seed_all, timeit
 
 flags.DEFINE_enum("task", None, ["mrpc"], "BERT fine-tuning task")
 
-flags.DEFINE_string("out_dir", None, "checkpoint directory")
+flags.DEFINE_string("eval_dir", None, "evaluation directory")
 
-flags.DEFINE_bool("overwrite", False, "overwrite previous directory")
+flags.DEFINE_bool("overwrite", False, "overwrite previous directory files")
 
 
 def _main(_argv):
     log.init()
 
-    expected_files = ["pytorch_model.bin", "config.json", "vocab.txt"]
-    for f in expected_files:
-        f = os.path.join(flags.FLAGS.out_dir, f)
+    eval_dir = flags.FLAGS.eval_dir
+    train_files = ["pytorch_model.bin", "config.json", "vocab.txt"]
+    for f in train_files:
+        f = os.path.join(eval_dir, f)
         if not tf.gfile.Exists(f):
             log.info("expected file {} to exist but it didn't", f)
             return
 
-    eval_dir = os.path.join(flags.FLAGS.out_dir, "eval")
-    needs_delete = False
-    if tf.gfile.Exists(eval_dir) and not flags.FLAGS.overwrite:
-        log.info("eval directory {} already exists, exiting", eval_dir)
-        return
-    elif tf.gfile.Exists(eval_dir) and flags.FLAGS.overwrite:
-        log.info("eval directory {} exists, will delete", eval_dir)
-        needs_delete = True
+    eval_files = [
+        "plots/layer.pdf",
+        "plots/head.pdf",
+        "plots/from_index.pdf",
+        "activations.npy",
+        "summary.json",
+    ]
+
+    for f in eval_files:
+        f = os.path.join(eval_dir, f)
+        if tf.gfile.Exists(f) and not flags.FLAGS.overwrite:
+            log.info(
+                "file {} exists and would be overwritten, but "
+                "--overwrite not specified",
+                f,
+            )
+            return
 
     glue_data = get_glue(flags.FLAGS.task)
     seed_all(1234)
 
-    # TODO load
-    # model = BertForSequenceClassification.from_pretrained(args.output_dir, num_labels=num_labels)
-    # tokenizer = BertTokenizer.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
+    args = bert_glue_params(flags.FLAGS.task)
+    args.data_dir = glue_data
+    args.cache_dir = "/tmp/bert_cache"
+    args.do_train = False
+    args.do_eval = True
+    args.no_cuda = False
+    args.local_rank = -1
+
+    local_dir = tempfile.mkdtemp()
+    log.info("work dir {}", local_dir)
+
+    local_weights = os.path.join(local_dir, "weights")
+    local_output = os.path.join(local_dir, "output")
+    os.makedirs(local_weights)
+    os.makedirs(local_output)
+
+    with timeit(name="load train weights"):
+        for f in train_files:
+            tf.gfile.Copy(
+                os.path.join(eval_dir, f), os.path.join(local_weights, f)
+            )
+
+    args.output_dir = local_output
+    args.load_dir = local_weights
+
+    main(args)
 
     # TODO: hugging_face/minimal.py: eval
     # do eval on train + val
@@ -77,9 +110,8 @@ def _main(_argv):
 
     # TODO can delete attention decay after this
 
-    if needs_delete:
-        tf.gfile.DeleteRecursively(eval_dir)
-    tf.gfile.MakeDirs(eval_dir)
+    log.info("cleaning up work dir {}", local_dir)
+    # shutil.rmtree(local_dir)
 
 
 if __name__ == "__main__":

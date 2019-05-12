@@ -8,8 +8,8 @@ import subprocess
 import sys
 
 from . import log
-from .utils import timeit
 from .google_bert import run_classifier
+from .utils import timeit
 
 
 def get_glue(task):

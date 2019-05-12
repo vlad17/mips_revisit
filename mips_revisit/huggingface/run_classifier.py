@@ -29,20 +29,20 @@ from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import f1_score, matthews_corrcoef
 
 import torch
-from .file_utils import (CONFIG_NAME,
-                                                PYTORCH_PRETRAINED_BERT_CACHE,
-                                                WEIGHTS_NAME)
-from .modeling import (BertConfig,
-                                              BertForSequenceClassification)
-from .optimization import BertAdam, WarmupLinearSchedule
-from .tokenization import BertTokenizer
 from torch.nn import CrossEntropyLoss, MSELoss
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
                               TensorDataset)
 from torch.utils.data.distributed import DistributedSampler
-from tqdm import tqdm, trange
+from tqdm.autonotebook import tqdm, trange
 
-logger = logging.getLogger(__name__)
+from .. import log
+from .file_utils import (CONFIG_NAME, PYTORCH_PRETRAINED_BERT_CACHE,
+                         WEIGHTS_NAME)
+from .modeling import BertConfig, BertForSequenceClassification
+from .optimization import BertAdam, WarmupLinearSchedule
+from .tokenization import BertTokenizer
+
+logger = log
 
 
 class InputExample(object):
@@ -943,14 +943,15 @@ def main(args):
         if args.load_dir:
             # Load a trained model and vocabulary that you have fine-tuned
             model = BertForSequenceClassification.from_pretrained(
-                args.output_dir, num_labels=num_labels
+                args.load_dir, num_labels=num_labels
             )
             tokenizer = BertTokenizer.from_pretrained(
-                args.output_dir, do_lower_case=args.do_lower_case
+                args.load_dir, do_lower_case=args.do_lower_case
             )
-        model = BertForSequenceClassification.from_pretrained(
-            args.bert_model, num_labels=num_labels
-        )
+        else:
+            model = BertForSequenceClassification.from_pretrained(
+                args.bert_model, num_labels=num_labels
+            )
     model.to(device)
 
     if args.do_eval and (
