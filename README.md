@@ -7,7 +7,7 @@ attention on transformer models.
 
 ```
 # CPU
-conda env create -f environment.yaml [--prefix /your/path/to/anaconda3]
+conda env create -f [cpu-]environment.yaml [--prefix /your/path/to/anaconda3]
 source activate mips-revisit-env
 ```
 
@@ -27,7 +27,6 @@ All scripts are available in `scripts/`, and should be run from the repo root in
 
 | script | purpose |
 | ------ | ------- |
-| `lint.sh` | invokes `pylint` with the appropriate flags for this repo... I don't really use this |
 | `format.sh` | auto-format the entire `mips_revisit` directory |
 
-Use `conda env export > environment.yaml` to save new dependencies.
+Use `conda env export > [cpu-]environment.yaml` to bsave new dependencies.
