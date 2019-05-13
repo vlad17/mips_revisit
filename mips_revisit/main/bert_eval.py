@@ -11,7 +11,8 @@ performs the following:
 Inside $EVAL_DIR/eval, creates the following files:
 
 plots/{layer,head,from_index}.pdf - pictures of activation distribution
-activations.npy - array, indexed by "to" position, of average activations
+average_activations.npy - array of average activations, sorted
+activations.npy - array of sampled activations
 summary.json - dev set evaluation scores.
 """
 
@@ -52,6 +53,7 @@ def _main(_argv):
         "plots/layer.pdf",
         "plots/head.pdf",
         "plots/from_index.pdf",
+        "average_activations.npy",
         "activations.npy",
         "summary.json",
     ]
@@ -106,13 +108,18 @@ def _main(_argv):
     tf.gfile.Copy(outfile, upload, overwrite=True)
     log.info("uploaded dev results to {}", upload)
 
-    # record marginal activations
-    np.save(os.path.join(local_dir, "activations.npy"), marginal)
-    upload = os.path.join(eval_dir, "activations.npy")
-    tf.gfile.Copy(
-        os.path.join(local_dir, "activations.npy"), upload, overwrite=True
-    )
-    log.info("uploaded marginal activations to {}", upload)
+    # record activations
+    for val, name in [(marginal, "average_activations.npy"),
+                      (attns, "activations.npy")]:
+        np.save(os.path.join(local_dir, name), val)
+        upload = os.path.join(eval_dir, name)
+        tf.gfile.Copy(
+            os.path.join(local_dir, name), upload, overwrite=True
+        )
+        log.info("uploaded {} to {}", name, upload)
+
+    # now sort attns
+    attns.sort(axis=-1)
 
     # generate and save plots
     # attns = Batch x Layer x Head x Seqlen (from) x SeqLen (to)

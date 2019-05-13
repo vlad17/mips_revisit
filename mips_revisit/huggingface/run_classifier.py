@@ -625,6 +625,7 @@ def main(args, return_attn=False, attn_subsample_size=64):
     #
     # subsampled attns returns subsampled attn matrix as
     # (subsample batch) x layer x head x from x to
+    # these are not sorted.
     #
     # if return_attn is false marginal_attn and subsampled attns
     # are null values.
@@ -1038,13 +1039,12 @@ def main(args, return_attn=False, attn_subsample_size=64):
                     attn = attn.cpu().numpy()
                     for ex in attn:
                         ex = softmax(ex, -1)
-                        ex.sort(axis=-1)
                         attns.update(ex)
                         if marginal_attn is None:
-                            marginal_attn = ex, 1
+                            marginal_attn = np.sort(ex, -1), 1
                         else:
                             total, count = marginal_attn
-                            total += ex
+                            total += np.sort(ex, -1)
                             count += 1
                             marginal_attn = total, count
                     attn = None
