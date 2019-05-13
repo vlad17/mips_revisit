@@ -39,6 +39,10 @@ flags.DEFINE_bool("overwrite", False, "overwrite previous directory files")
 
 
 def _main(_argv):
+
+    # TODO -- make a wrapper around tf.gfile
+    # that transparently supports both gs:// and s3://
+
     log.init()
 
     eval_dir = flags.FLAGS.eval_dir
