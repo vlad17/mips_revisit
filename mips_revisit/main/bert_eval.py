@@ -45,7 +45,7 @@ def _main(_argv):
     # lazily load tf/boto3 on deps
     # need exists, makedirs, copy (bidirectional)
     #
-    # todo -- gonna need spot v100
+    # todo -- gonna need spot v100 (aws-magic)
 
     log.init()
 
@@ -104,7 +104,7 @@ def _main(_argv):
     args.output_dir = os.path.join(local_dir, "output")
     args.load_dir = local_dir
 
-    res, marginal, attns = main(args, return_attn=True, attn_subsample_size=64)
+    res, marginal, attns = main(args, return_attn=True, attn_subsample_size=512)
 
     log.info("dev results {}", res)
 
