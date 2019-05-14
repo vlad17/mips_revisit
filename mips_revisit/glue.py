@@ -32,10 +32,10 @@ def get_glue(task):
 
     glue_tasks = {
         "cola": "CoLA",
-        "sst-2": "SST",
+        "sst-2": "SST-2",
         "mrpc": "MRPC",
         "qqp": "QQP",
-        "sts-b": "STS",
+        "sts-b": "STS-B",
         "mnli": "MNLI",
         "snli": "SNLI",
         "qnli": "QNLI",

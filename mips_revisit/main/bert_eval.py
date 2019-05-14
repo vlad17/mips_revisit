@@ -42,6 +42,10 @@ def _main(_argv):
 
     # TODO -- make a wrapper around tf.gfile
     # that transparently supports both gs:// and s3://
+    # lazily load tf/boto3 on deps
+    # need exists, makedirs, copy (bidirectional)
+    #
+    # todo -- gonna need spot v100
 
     log.init()
 
