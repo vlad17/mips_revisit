@@ -33,7 +33,7 @@ def get_twilio_creds_and_phone():
     account_sid = os.environ[sidname]
     auth_token = os.environ[tokname]
     phone = os.environ[phone]
-    phone = os.environ[origin]
+    origin = os.environ[origin]
 
     return account_sid, auth_token, phone, origin
 
@@ -54,9 +54,9 @@ def makesms(body):
 
     client = Client(sid, token)
 
-    client.messages \
+    log.debug("twilio {}", client.messages \
                 .create(
                      body=body,
                      from_=origin,
                      to=phone
-                 )
+                 ))

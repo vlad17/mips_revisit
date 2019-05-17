@@ -32,7 +32,7 @@ from datetime import datetime
 
 from absl import flags
 
-flags.DEFINE_boolean("verbose", False, "whether to activate debug logging")
+flags.DEFINE_boolean("verbose", True, "whether to activate debug logging")
 
 
 class _StackCrawlingFormatter(logging.Formatter):

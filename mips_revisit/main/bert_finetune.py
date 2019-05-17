@@ -26,17 +26,17 @@ from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..sync import exists, sync
 from ..utils import seed_all
-from ..twilio import makesms
+from ..sms import makesms
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
-flags.DEFINE_attn("attn", "soft", ["soft"], "attention type")
+flags.DEFINE_enum("attn", "soft", ["soft"], "attention type")
 
 flags.DEFINE_string("out_dir", None, "checkpoint output directory")
 
 flags.DEFINE_bool("overwrite", False, "overwrite previous directory files")
 
-flags.DEFINE_int("k", 0, "k to use when using k-attention")
+flags.DEFINE_integer("k", 0, "k to use when using k-attention")
 
 
 def _main(_argv):

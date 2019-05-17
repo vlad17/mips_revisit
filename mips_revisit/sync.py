@@ -8,7 +8,7 @@ import distutils.spawn
 import shutil
 import subprocess
 import time
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 from . import log
 from .utils import timeit
@@ -44,7 +44,7 @@ def _check_remote(remote_dir):
     return True
 
 
-def sync(self, src, dst):
+def sync(src, dst):
     assert not _check_remote(src)
     with timeit() as t:
         _sync(src, dst)
@@ -91,7 +91,7 @@ def exists(remote):
 
         c = client("s3")
         parsed = urlparse(remote, allow_fragments=False)
-        response = client.list_objects_v2(
+        response = c.list_objects_v2(
             Bucket=parsed.netloc, Prefix=parsed.path
         )
         for obj in response.get("Contents", []):
