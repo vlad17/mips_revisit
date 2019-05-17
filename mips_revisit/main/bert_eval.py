@@ -29,6 +29,7 @@ from .. import log
 from ..glue import get_glue
 from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES, bert_glue_params
+from ..sync import exists, sync
 from ..utils import import_matplotlib, seed_all, timeit
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
@@ -40,20 +41,13 @@ flags.DEFINE_bool("overwrite", False, "overwrite previous directory files")
 
 def _main(_argv):
 
-    # TODO -- make a wrapper around tf.gfile
-    # that transparently supports both gs:// and s3://
-    # lazily load tf/boto3 on deps
-    # need exists, makedirs, copy (bidirectional)
-    #
-    # todo -- gonna need spot v100 (aws-magic)
-
     log.init()
 
     eval_dir = flags.FLAGS.eval_dir
     train_files = ["pytorch_model.bin", "config.json", "vocab.txt"]
     for f in train_files:
         f = os.path.join(eval_dir, f)
-        if not tf.gfile.Exists(f):
+        if not exists(f):
             log.info("expected file {} to exist but it didn't", f)
             return
 
@@ -68,7 +62,7 @@ def _main(_argv):
 
     for f in eval_files:
         f = os.path.join(eval_dir, f)
-        if tf.gfile.Exists(f) and not flags.FLAGS.overwrite:
+        if exists(f) and not flags.FLAGS.overwrite:
             log.info(
                 "file {} exists and would be overwritten, but "
                 "--overwrite not specified",
@@ -92,19 +86,21 @@ def _main(_argv):
     args.server_ip = ""
     args.server_port = ""
 
-    local_dir = tempfile.mkdtemp()
+    # TODO: here and in finetune, randomize the local path
+    local_dir = os.path.join(
+        os.getcwd(), "generated", "eval", flags.FLAGS.task
+    )
     log.info("work dir {}", local_dir)
 
     with timeit(name="load train weights"):
-        for f in train_files:
-            tf.gfile.Copy(
-                os.path.join(eval_dir, f), os.path.join(local_dir, f)
-            )
+        sync(eval_dir, local_dir)
 
     args.output_dir = os.path.join(local_dir, "output")
     args.load_dir = local_dir
 
-    res, marginal, attns = main(args, return_attn=True, attn_subsample_size=512)
+    res, marginal, attns = main(
+        args, return_attn=True, attn_subsample_size=512
+    )
 
     log.info("dev results {}", res)
 
@@ -112,19 +108,13 @@ def _main(_argv):
     outfile = os.path.join(local_dir, "summary.json")
     with open(outfile, "w") as f:
         json.dump(res, f, sort_keys=True, indent=4)
-    upload = os.path.join(eval_dir, "summary.json")
-    tf.gfile.Copy(outfile, upload, overwrite=True)
-    log.info("uploaded dev results to {}", upload)
 
     # record activations
-    for val, name in [(marginal, "average_activations.npy"),
-                      (attns, "activations.npy")]:
+    for val, name in [
+        (marginal, "average_activations.npy"),
+        (attns, "activations.npy"),
+    ]:
         np.save(os.path.join(local_dir, name), val)
-        upload = os.path.join(eval_dir, name)
-        tf.gfile.Copy(
-            os.path.join(local_dir, name), upload, overwrite=True
-        )
-        log.info("uploaded {} to {}", name, upload)
 
     # now sort attns
     attns.sort(axis=-1)
@@ -176,16 +166,8 @@ def _main(_argv):
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
     plt.clf()
 
-    upload = os.path.join(eval_dir, "plots")
-    log.info("uploading {} to {}", out_dir, upload)
-    tf.gfile.MakeDirs(upload)
-    for f in eval_files:
-        if not f.startswith("plots/"):
-            continue
-        dst = os.path.join(eval_dir, f)
-        src = os.path.join(local_dir, f)
-        tf.gfile.Copy(src, dst, overwrite=True)
-
+    shutil.rmtree(os.path.join(local_dir, "output"))
+    sync(local_dir, eval_dir)
     log.info("removing work dir {}", local_dir)
     shutil.rmtree(local_dir)
 

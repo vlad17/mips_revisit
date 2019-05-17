@@ -16,9 +16,17 @@ source activate mips-revisit-env
 Run BERT pretraining with approximate K-MIPS (default K = 10)
 ```
 TASK=mrpc
-python -m mips_revisit.main.bert_finetune --task ${TASK} --out_dir gs://bert-mips/finetune/${TASK} --overwrite
-python -m mips_revisit.main.bert_eval --task ${TASK} --eval_dir gs://bert-mips/finetune/${TASK} --overwrite
+python -m mips_revisit.main.bert_finetune --task ${TASK} --out_dir generated/finetune/${TASK}
+python -m mips_revisit.main.bert_eval --task ${TASK} --eval_dir generated/finetune/${TASK} --overwrite
+```
 
+For text updates, set the following env vars.
+
+```
+TWILIO_ACCOUNT_SID
+TWILIO_AUTH_TOKEN
+TARGET_PHONE_FOR_SMS
+ORIGIN_PHONE_FOR_SMS
 ```
 
 ## Dev info

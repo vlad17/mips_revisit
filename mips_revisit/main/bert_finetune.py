@@ -24,6 +24,7 @@ from .. import log
 from ..glue import get_glue
 from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES, bert_glue_params
+from ..sync import exists, sync
 from ..utils import seed_all
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
@@ -40,7 +41,7 @@ def _main(_argv):
     expected_files = ["pytorch_model.bin", "config.json", "vocab.txt"]
     for f in expected_files:
         f = os.path.join(flags.FLAGS.out_dir, f)
-        if tf.gfile.Exists(f) and not flags.FLAGS.overwrite:
+        if exists(f) and not flags.FLAGS.overwrite:
             log.info(
                 "file {} exists and would be overwritten, but "
                 "--overwrite not specified",
@@ -54,7 +55,9 @@ def _main(_argv):
     args = bert_glue_params(flags.FLAGS.task)
     args.data_dir = glue_data
 
-    local_dir = os.path.join(os.getcwd(), "generated", flags.FLAGS.task)
+    local_dir = os.path.join(
+        os.getcwd(), "generated", "initial", flags.FLAGS.task
+    )
     log.info(
         "using dir {} for local weights (final weights will be in {})",
         local_dir,
@@ -83,11 +86,9 @@ def _main(_argv):
 
     main(args)
 
-    tf.gfile.MakeDirs(out_dir)
-    for f in expected_files:
-        src = os.path.join(local_dir, f)
-        dst = os.path.join(out_dir, f)
-        tf.gfile.Copy(src, dst, overwrite=True)
+    sync(local_dir, out_dir)
+    log.info("removing work dir {}", local_dir)
+    shutil.rmtree(local_dir)
 
 
 if __name__ == "__main__":
