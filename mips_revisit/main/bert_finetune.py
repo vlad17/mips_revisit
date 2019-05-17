@@ -26,12 +26,17 @@ from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..sync import exists, sync
 from ..utils import seed_all
+from ..twilio import makesms
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
+
+flags.DEFINE_attn("attn", "soft", ["soft"], "attention type")
 
 flags.DEFINE_string("out_dir", None, "checkpoint output directory")
 
 flags.DEFINE_bool("overwrite", False, "overwrite previous directory files")
+
+flags.DEFINE_int("k", 0, "k to use when using k-attention")
 
 
 def _main(_argv):
@@ -48,6 +53,9 @@ def _main(_argv):
                 f,
             )
             return
+
+    makesms("STARTING bert finetune\nk={}\nattn={}\ntask={}\nout_dir={}"
+            .format(flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task, out_dir))
 
     glue_data = get_glue(flags.FLAGS.task)
     seed_all(1234)
@@ -84,11 +92,19 @@ def _main(_argv):
     args.server_ip = ""
     args.server_port = ""
 
-    main(args)
+    try:
+        main(args)
+        sync(local_dir, out_dir)
+        log.info("removing work dir {}", local_dir)
+        shutil.rmtree(local_dir)
+    except:
+        makesms("ERROR in bert finetune\nk={}\nattn={}\ntask={}\nout_dir={}"
+            .format(flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task, out_dir))
+        raise
 
-    sync(local_dir, out_dir)
-    log.info("removing work dir {}", local_dir)
-    shutil.rmtree(local_dir)
+    makesms("COMPLETED bert finetune\nk={}\nattn={}\ntask={}\nout_dir={}"
+            .format(flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task, out_dir))
+
 
 
 if __name__ == "__main__":

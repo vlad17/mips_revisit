@@ -16,7 +16,10 @@ source activate mips-revisit-env
 Run BERT pretraining with approximate K-MIPS (default K = 10)
 ```
 TASK=mrpc
-python -m mips_revisit.main.bert_finetune --task ${TASK} --out_dir generated/finetune/${TASK}
+K=0
+ATTN=soft
+S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert/${TASK}/k${K}/${ATTN}
+python -m mips_revisit.main.bert_finetune --k ${K} --attn ${ATTN} --task ${TASK} --out_dir ${S3PREFIX}
 python -m mips_revisit.main.bert_eval --task ${TASK} --eval_dir generated/finetune/${TASK} --overwrite
 ```
 
