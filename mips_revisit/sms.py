@@ -5,9 +5,11 @@ This expects twilio creds in your env
 """
 
 import os
+
 from twilio.rest import Client
 
 from . import log
+
 
 def get_twilio_creds_and_phone():
     """
@@ -21,10 +23,10 @@ def get_twilio_creds_and_phone():
     TARGET_PHONE_FOR_SMS
     ORIGIN_PHONE_FOR_SMS
     """
-    sidname = 'TWILIO_ACCOUNT_SID'
-    tokname = 'TWILIO_AUTH_TOKEN'
-    phone = 'TARGET_PHONE_FOR_SMS'
-    origin = 'ORIGIN_PHONE_FOR_SMS'
+    sidname = "TWILIO_ACCOUNT_SID"
+    tokname = "TWILIO_AUTH_TOKEN"
+    phone = "TARGET_PHONE_FOR_SMS"
+    origin = "ORIGIN_PHONE_FOR_SMS"
 
     for x in [sidname, tokname, phone, origin]:
         if x not in os.environ:
@@ -37,6 +39,7 @@ def get_twilio_creds_and_phone():
 
     return account_sid, auth_token, phone, origin
 
+
 def makesms(body):
     """
     Best-effort send a message with environment-set
@@ -48,15 +51,15 @@ def makesms(body):
     try:
         sid, token, phone, origin = get_twilio_creds_and_phone()
     except KeyError as e:
-        log.debug('error ({}) sending twilio message ({}), suppressing',
-                 e.args[0], body)
+        log.debug(
+            "error ({}) sending twilio message ({}), suppressing",
+            e.args[0],
+            body,
+        )
         return
 
     client = Client(sid, token)
 
-    log.debug("twilio {}", client.messages \
-                .create(
-                     body=body,
-                     from_=origin,
-                     to=phone
-                 ))
+    log.debug(
+        "twilio {}", client.messages.create(body=body, from_=origin, to=phone)
+    )

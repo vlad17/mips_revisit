@@ -25,7 +25,6 @@ import random
 import sys
 
 import numpy as np
-from scipy.special import softmax
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import f1_score, matthews_corrcoef
 
@@ -37,7 +36,6 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm.auto import tqdm, trange
 
 from .. import log
-from ..utils import OnlineSampler
 from .file_utils import (CONFIG_NAME, PYTORCH_PRETRAINED_BERT_CACHE,
                          WEIGHTS_NAME)
 from .modeling import BertConfig, BertForSequenceClassification
@@ -616,22 +614,16 @@ def compute_metrics(task_name, preds, labels):
         raise KeyError(task_name)
 
 
-def main(args, return_attn=False, attn_subsample_size=64):
-    # returns tuple (summary, marginal attn, subsampled attns)
+def main(args, attn_observer):
+    # returns a dict summary of results (or none)
     #
-    # marginal attn is true average
-    # of sorted attentions by "to" index
-    # shape is layer x head x from x to
+    # attn_observer, if not none, is called on each
+    # batch attn tensor (first head only)
+    # batch x layer x seq x dim
     #
-    # subsampled attns returns subsampled attn matrix as
-    # (subsample batch) x layer x head x from x to
-    # these are not sorted.
-    #
-    # if return_attn is false marginal_attn and subsampled attns
-    # are null values.
-    attns = OnlineSampler(k=attn_subsample_size)
-    marginal_attn = None
-    result = {}
+    # and each attention score
+    # batch x layer x head x from x to
+    result = None
 
     if args.server_ip and args.server_port:
         # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
@@ -974,7 +966,7 @@ def main(args, return_attn=False, attn_subsample_size=64):
     if args.do_eval and (
         args.local_rank == -1 or torch.distributed.get_rank() == 0
     ):
-        eval_examples = processor.get_dev_examples(args.data_dir)
+        eval_examples = get_eval(args.data_dir, processor, args.eval_set_name)
         eval_features = convert_examples_to_features(
             eval_examples,
             label_list,
@@ -1027,35 +1019,13 @@ def main(args, return_attn=False, attn_subsample_size=64):
             label_ids = label_ids.to(device)
 
             with torch.no_grad():
-                if return_attn:
-                    logits, attn = model(
-                        input_ids,
-                        segment_ids,
-                        input_mask,
-                        labels=None,
-                        return_attn=True,
-                    )
-                    # batch x layer x head x from x to
-                    attn = attn.cpu().numpy()
-                    for ex in attn:
-                        ex = softmax(ex, -1)
-                        attns.update(ex)
-                        if marginal_attn is None:
-                            marginal_attn = np.sort(ex, -1), 1
-                        else:
-                            total, count = marginal_attn
-                            total += np.sort(ex, -1)
-                            count += 1
-                            marginal_attn = total, count
-                    attn = None
-                else:
-                    logits = model(
-                        input_ids,
-                        segment_ids,
-                        input_mask,
-                        labels=None,
-                        return_attn=False,
-                    )
+                logits = model(
+                    input_ids,
+                    segment_ids,
+                    input_mask,
+                    labels=None,
+                    attn_observer=attn_observer,
+                )
 
             # create eval loss and other metric required by the task
             if output_mode == "classification":
@@ -1104,7 +1074,9 @@ def main(args, return_attn=False, attn_subsample_size=64):
             if not os.path.exists(args.output_dir + "-MM"):
                 os.makedirs(args.output_dir + "-MM")
 
-            eval_examples = processor.get_dev_examples(args.data_dir)
+            eval_examples = get_eval(
+                args.data_dir, processor, args.eval_set_name
+            )
             eval_features = convert_examples_to_features(
                 eval_examples,
                 label_list,
@@ -1176,9 +1148,18 @@ def main(args, return_attn=False, attn_subsample_size=64):
             preds = np.argmax(preds, axis=1)
             result = compute_metrics(task_name, preds, all_label_ids.numpy())
             result["loss"] = eval_loss
-    if return_attn:
-        attns = attns.sample
-        attns = np.stack(attns, axis=0)
-        total, count = marginal_attn
-        marginal_attn = total / count
-    return result, marginal_attn, attns
+    return result
+
+
+def get_eval(data_dir, processor, eval_set_name):
+    """
+    get evaluation examples, can be dev or train
+    """
+
+    if eval_set_name == "dev":
+        return processor.get_dev_examples(data_dir)
+
+    if eval_set_name == "train":
+        return processor.get_train_examples(data_dir)
+
+    raise KeyError(eval_set_name)
