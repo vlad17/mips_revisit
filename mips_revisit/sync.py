@@ -76,10 +76,7 @@ def _sync(src, dst):
         ret = sync_process.wait()  # fail gracefully
         if not ret:
             log.info(
-                "sync from {} to {} failed with return code {}",
-                src,
-                dst,
-                ret,
+                "sync from {} to {} failed with return code {}", src, dst, ret
             )
 
 
@@ -91,9 +88,7 @@ def exists(remote):
 
         c = client("s3")
         parsed = urlparse(remote, allow_fragments=False)
-        response = c.list_objects_v2(
-            Bucket=parsed.netloc, Prefix=parsed.path
-        )
+        response = c.list_objects_v2(Bucket=parsed.netloc, Prefix=parsed.path)
         for obj in response.get("Contents", []):
             if obj["Key"] == key:
                 return True

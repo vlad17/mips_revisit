@@ -1,6 +1,4 @@
 """
-Usage: python -m mips_revisit.main.bert_eval --task mrpc --eval_dir gs://bert-mips/finetune/mrpc --overwrite
-
 Given a task and evaluation directory EVAL_DIR, this file, when run,
 performs the following:
 
@@ -8,35 +6,64 @@ performs the following:
   by mips_revisit.main.bert_train
 * Evaluate the model on the dev set
 
-Inside $EVAL_DIR/eval, creates the following files:
+Inside $EVAL_DIR, creates the following files:
 
-plots/{layer,head,from_index}.pdf - pictures of activation distribution
+for each of {dev,train}, in a subdirectory:
+
 average_activations.npy - array of average activations, sorted
-activations.npy - array of sampled activations
-summary.json - dev set evaluation scores.
+layer x head x from x to
+from and to are indices into the attention sequence (both span the seq len)
+the "to" axis is softmaxed, sorted, and then averaged.
+
+average_norms.npy - array of average attention norms, sorted
+layer x head x norm-sorted seq index
+for each attention vector before self-attention, we take its norm
+this contains the average norm of the i-th largest vector in each
+activation
+
+attention_sample.npy - array of sampled attention vectors
+batch x layer x seq x dim
+a random sample of attention vectors, for the first head.
+
+activation_sample.npy - array of sampled attention inner
+product activations
+batch x layer x from x to
+sorted on the last index by value as above
+
+summary.json - evaluation scores.
+
+act_{layer,head,from_index}.pdf - pictures of activation distribution
+based on a sample of the activations
+
+nrm_{layer,head}.pdf - pictures of (marginal) norm distribution,
+complete marginal vs layer-conditioned vs head-conditioned.
 """
 
 import json
 import os
 import shutil
-import tempfile
 
 import numpy as np
-import tensorflow as tf
 from absl import app, flags
+from scipy.special import softmax
 
 from .. import log
 from ..glue import get_glue
 from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES, bert_glue_params
+from ..sms import makesms
 from ..sync import exists, sync
-from ..utils import import_matplotlib, seed_all, timeit
+from ..utils import OnlineSampler, import_matplotlib, seed_all, timeit
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
 flags.DEFINE_string("eval_dir", None, "evaluation directory")
 
 flags.DEFINE_bool("overwrite", False, "overwrite previous directory files")
+
+flags.DEFINE_int(
+    "attention_samples", 64, "number of attention samples to grab"
+)
 
 
 def _main(_argv):
@@ -52,28 +79,136 @@ def _main(_argv):
             return
 
     eval_files = [
-        "plots/layer.pdf",
-        "plots/head.pdf",
-        "plots/from_index.pdf",
+        "act_layer.pdf",
+        "act_head.pdf",
+        "act_from_index.pdf",
+        "nrm_layer.pdf",
+        "nrm_head.pdf",
         "average_activations.npy",
-        "activations.npy",
+        "average_norms.npy",
+        "attention_sample.npy",
+        "activation_sample.npy",
+        "average_activations.npy",
+        "average_norms.npy",
+        "attention_sample.npy",
+        "activation_sample.npy",
         "summary.json",
     ]
 
-    for f in eval_files:
-        f = os.path.join(eval_dir, f)
-        if exists(f) and not flags.FLAGS.overwrite:
-            log.info(
-                "file {} exists and would be overwritten, but "
-                "--overwrite not specified",
-                f,
-            )
-            return
+    for d in ["dev", "train"]:
+        for f in eval_files:
+            f = os.path.join(eval_dir, d, f)
+            if exists(f) and not flags.FLAGS.overwrite:
+                log.info(
+                    "file {} exists and would be overwritten, but "
+                    "--overwrite not specified",
+                    f,
+                )
+                return
 
     glue_data = get_glue(flags.FLAGS.task)
     seed_all(1234)
 
+    makesms("STARTING bert eval\neval_dir={}".format(eval_dir))
+
+    local_dir = os.path.join(
+        os.getcwd(), "generated", "eval", flags.FLAGS.task
+    )
+    log.info("work dir {}", local_dir, glue_data)
+
+    with timeit(name="load train weights"):
+        sync(eval_dir, local_dir)
+
+    try:
+        _setup_main(local_dir, glue_data)
+    except:
+        makesms("ERROR in bert eval\neval_dir={}".format(eval_dir))
+        raise
+
+    with timeit(name="saving outputs"):
+        sync(local_dir, eval_dir)
+
+    log.info("removing work dir {}", local_dir)
+    shutil.rmtree(local_dir)
+
+    makesms("COMPLETED bert eval\neval_dir={}".format(eval_dir))
+
+
+class AttentionObserver:
+    # called by eval function
+    #
+    # each call updates with a batch's new activations
+    #
+    # attn, or attention vectors, which are the self-attention
+    # keys, queries and values (only first head). shape is
+    # batch x layer x seq x dim
+    #
+    # scrs, or scores, which are the result of the matrix
+    # multiplication of the attention vectors with their own
+    # transpose in self-attention. Here we preserve head info.
+    # batch x layer x head x from x to
+    #
+    # seq, from, to are all indexed over the sequence length
+    #
+    # no masking is performed.
+    #
+    # b = batch, l = layer, h = head, d = dim
+    # f = from, t = to, s = seq
+    # |f| = |t| = |s|
+    #
+    # note that in the paper the scrs come into this
+    # observer normalized by
+    # a scale 1 / sqrt(d). For consistency:
+    #
+    # attn is normalized by d^(-1/4)
+    # scrs is normalized by d^(-1/2)
+
+    def __init__(self, attn_sample_size, l, h, s):
+        self.attn_reservoir = OnlineSampler(k=attn_sample_size)
+        self.acts_reservoir = OnlineSampler(k=attn_sample_size)
+        self.sum_activations_lhft = np.zeros(l, h, s, s)
+        self.sum_norms_lhs = np.zeros(l, h, s)
+        self.s = s
+        self.count = 0
+
+    def __call__(self, attn_blsd, scrs_blhft):
+        for ex_lsd in attn_blsd:
+            self.attn_reservoir.update(ex_lsd)
+
+        for ex_lhft in scrs_blhft:
+            ex_lhft = softmax(ex_lhft, axis=-1)
+            ex_lhft.sort(axis=-1)
+            self.acts_reservoir.update(ex_lhft)
+
+            self.sum_activations_lhft += ex_lhft
+
+        ix = np.arange(int(self.s))
+        sqnorm_blhs = scrs_blhft[..., ix, ix]
+        norm_blhs = np.sqrt(sqnorm_blhs)
+        norm_blhs.sort(axis=-1)
+        self.sum_norms_lhs += norm_blhs.sum(axis=0)
+
+        self.count += norm_blhs.shape[0]
+
+    def reify(self):
+        """
+        x = sample size
+        """
+        attn_xlsd = np.stack(self.attn_reservoir.sample)
+        acts_xlhft = np.stack(self.acts_reservoir.sample)
+        avg_act_lhft = self.sum_activations_lhft / self.count
+        avg_nrm_lhs = self.sum_norms_lhs / self.count
+
+        return (attn_xlsd, acts_xlhft, avg_act_lhft, avg_nrm_lhs)
+
+
+def _setup_main(local_dir, glue_data):
+    """
+    Runs locally, saving all intended output to local_dir.
+    """
+
     args = bert_glue_params(flags.FLAGS.task)
+
     args.data_dir = glue_data
     args.cache_dir = "/tmp/bert_cache"
     args.do_train = False
@@ -86,35 +221,59 @@ def _main(_argv):
     args.server_ip = ""
     args.server_port = ""
 
-    # TODO: here and in finetune, randomize the local path
-    local_dir = os.path.join(
-        os.getcwd(), "generated", "eval", flags.FLAGS.task
-    )
-    log.info("work dir {}", local_dir)
-
-    with timeit(name="load train weights"):
-        sync(eval_dir, local_dir)
-
     args.output_dir = os.path.join(local_dir, "output")
     args.load_dir = local_dir
 
-    res, marginal, attns = main(
-        args, return_attn=True, attn_subsample_size=512
+    for v in ["dev", "train"]:
+        d = os.path.join(local_dir, v)
+        os.makedirs(d, exist_ok=True)
+        _eval(v, args, d)
+
+    shutil.rmtree(args.output_dir)
+
+
+def _eval(eval_set_name, args, target_dir):
+    """
+    Runs evaluation on the given evaluation set
+    (dev or train), saving outputs to the target_dir
+    """
+
+    bert_base_layers = 12
+    bert_base_heads = 12
+    seqlen = args.max_seq_length
+
+    observer = AttentionObserver(
+        flags.FLAGS.attention_samples,
+        bert_base_layers,
+        bert_base_heads,
+        seqlen,
     )
 
-    log.info("dev results {}", res)
+    with timeit(name="run {} eval".format(eval_set_name)):
+        args.eval_set_name = eval_set_name
+        res = main(args, observer)
+
+    (attn_xlsd, acts_xlhft, avg_act_lhft, avg_nrm_lhs) = observer.reify()
+
+    log.info(f"{eval_set_name} results {res}")
 
     # record results
-    outfile = os.path.join(local_dir, "summary.json")
+    outfile = os.path.join(target_dir, "summary.json")
     with open(outfile, "w") as f:
         json.dump(res, f, sort_keys=True, indent=4)
 
     # record activations
-    for val, name in [
-        (marginal, "average_activations.npy"),
-        (attns, "activations.npy"),
-    ]:
-        np.save(os.path.join(local_dir, name), val)
+    to_persist = [
+        (avg_act_lhft, "average_activations.npy"),
+        (avg_nrm_lhs, "average_norms.npy"),
+        (attn_xlsd, "attention_sample.npy"),
+        (acts_xlhft, "activation_sample.npy"),
+    ]
+    with timeit(name=f"persist {eval_set_name} attn"):
+        for val, name in to_persist:
+            np.save(os.path.join(target_dir, name), val)
+
+    attns = acts_xlhft
 
     # now sort attns
     attns.sort(axis=-1)
@@ -124,9 +283,9 @@ def _main(_argv):
     # marginal = layer x head x from x to
     # recall it's *ordered* on to index.
     plt = import_matplotlib()
-    marginal = marginal.mean(axis=2).mean(axis=1).mean(axis=0)
+    marginal = avg_act_lhft.mean(axis=2).mean(axis=1).mean(axis=0)
 
-    def semilogy(mat_bx):
+    def semilogy_acts(mat_bx):
         """plots b logscale curves, min max and median values"""
         lo, med, hi = (x(mat_bx, axis=0) for x in [np.min, np.median, np.max])
         plt.semilogy(med, ls=":", label="median", color="black", lw=2)
@@ -142,34 +301,60 @@ def _main(_argv):
         plt.xlabel("sorted activation index")
         plt.ylabel("softmax weight")
 
-    out_dir = os.path.join(local_dir, "plots")
-    os.makedirs(out_dir)
+    out_dir = target_dir
 
-    outfile = os.path.join(out_dir, "layer.pdf")
+    outfile = os.path.join(out_dir, "act_layer.pdf")
     log.info("generating {}", outfile)
-    semilogy(attns.mean(axis=3).mean(axis=2).mean(axis=0))
+    semilogy_acts(attns.mean(axis=3).mean(axis=2).mean(axis=0))
     plt.title("attn by layer")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
     plt.clf()
 
-    outfile = os.path.join(out_dir, "head.pdf")
+    outfile = os.path.join(out_dir, "act_head.pdf")
     log.info("generating {}", outfile)
-    semilogy(attns.mean(axis=3).mean(axis=1).mean(axis=0))
+    semilogy_acts(attns.mean(axis=3).mean(axis=1).mean(axis=0))
     plt.title("attn by head")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
     plt.clf()
 
-    outfile = os.path.join(out_dir, "from_index.pdf")
+    outfile = os.path.join(out_dir, "act_from_index.pdf")
     log.info("generating {}", outfile)
-    semilogy(attns.mean(axis=2).mean(axis=1).mean(axis=0))
+    semilogy_acts(attns.mean(axis=2).mean(axis=1).mean(axis=0))
     plt.title("attn by from idx")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
     plt.clf()
 
-    shutil.rmtree(os.path.join(local_dir, "output"))
-    sync(local_dir, eval_dir)
-    log.info("removing work dir {}", local_dir)
-    shutil.rmtree(local_dir)
+    marginal = avg_nrm_lhs.mean(axis=1).mean(axis=0)
+
+    def semilogy_nrms(mat_bx):
+        """plots b logscale curves, min max and median values"""
+        lo, med, hi = (x(mat_bx, axis=0) for x in [np.min, np.median, np.max])
+        plt.semilogy(med, ls=":", label="median", color="black", lw=2)
+        nx = mat_bx.shape[1]
+        plt.xlim(0, nx)
+        plt.fill_between(range(nx), lo, hi, color="grey", alpha=0.5)
+        plt.semilogy(lo, ls="--", label="min", color="grey")
+        plt.semilogy(hi, ls="--", label="max", color="grey")
+        plt.ylim(10 ** -3, 1)
+
+        plt.semilogy(marginal, ls="-", color="red", label="marginal", lw=1)
+        plt.legend()
+        plt.xlabel("sorted norm index")
+        plt.ylabel("norm")
+
+    outfile = os.path.join(out_dir, "nrm_layer.pdf")
+    log.info("generating {}", outfile)
+    semilogy_nrms(avg_nrm_lhs.mean(axis=1))
+    plt.title("norm by layer")
+    plt.savefig(outfile, format="pdf", bbox_inches="tight")
+    plt.clf()
+
+    outfile = os.path.join(out_dir, "nrm_head.pdf")
+    log.info("generating {}", outfile)
+    semilogy_nrms(avg_nrm_lhs.mean(axis=0))
+    plt.title("norm by head")
+    plt.savefig(outfile, format="pdf", bbox_inches="tight")
+    plt.clf()
 
 
 if __name__ == "__main__":

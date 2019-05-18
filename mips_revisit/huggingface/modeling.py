@@ -29,6 +29,8 @@ import tarfile
 import tempfile
 from io import open
 
+import numpy as np
+
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
@@ -340,7 +342,7 @@ class BertSelfAttention(nn.Module):
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
-    def forward(self, hidden_states, attention_mask, return_attn=False):
+    def forward(self, hidden_states, attention_mask, attn_observer=None):
         mixed_query_layer = self.query(hidden_states)
         mixed_key_layer = self.key(hidden_states)
         mixed_value_layer = self.value(hidden_states)
@@ -359,11 +361,13 @@ class BertSelfAttention(nn.Module):
             key_layer.transpose(-1, -2),
         )  # batch x head x from x to
 
+        if attn_observer:
+            scale = 1 / math.sqrt(self.attention_head_size)
+            attn_observer(query_layer, attention_scores, scale)
         attention_scores = attention_scores / math.sqrt(
             self.attention_head_size
         )
         # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
-        unmasked = attention_scores if return_attn else None
         attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
@@ -379,7 +383,7 @@ class BertSelfAttention(nn.Module):
             self.all_head_size,
         )
         context_layer = context_layer.view(*new_context_layer_shape)
-        return context_layer, unmasked
+        return context_layer
 
 
 class BertSelfOutput(nn.Module):
@@ -404,12 +408,12 @@ class BertAttention(nn.Module):
         self.self = BertSelfAttention(config)
         self.output = BertSelfOutput(config)
 
-    def forward(self, input_tensor, attention_mask, return_attn=False):
-        self_output, attn_or_none = self.self(
-            input_tensor, attention_mask, return_attn=return_attn
+    def forward(self, input_tensor, attention_mask, attn_observer=None):
+        self_output = self.self(
+            input_tensor, attention_mask, attn_observer=attn_observer
         )
         attention_output = self.output(self_output, input_tensor)
-        return attention_output, attn_or_none
+        return attention_output
 
 
 class BertIntermediate(nn.Module):
@@ -452,13 +456,54 @@ class BertLayer(nn.Module):
         self.intermediate = BertIntermediate(config)
         self.output = BertOutput(config)
 
-    def forward(self, hidden_states, attention_mask, return_attn=False):
-        attention_output, attn_or_none = self.attention(
-            hidden_states, attention_mask, return_attn=return_attn
+    def forward(self, hidden_states, attention_mask, attn_observer=None):
+        attention_output = self.attention(
+            hidden_states, attention_mask, attn_observer=attn_observer
         )
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
-        return layer_output, attn_or_none
+        return layer_output
+
+
+class AttentionLayerObserver:
+    def __init__(self, attn_observer):
+        self.attn_observer = attn_observer
+        self.vec_layers = []
+        self.scr_layers = []
+
+    # called every layer
+    def __call__(self, att_vec, att_scr, scale):
+        # expects the attention vectors
+        # for a given layer
+        # batch x head x seq x dim
+        #
+        # as well as the attention scores
+        # for a given layer
+        # batch x head x from x to
+        #
+        # can be torch gpu tensors
+        if not self.attn_observer:
+            return
+
+        # first head only
+        with torch.no_grad():
+            att_vec = att_vec[:, 0, :, :]
+            att_vec = math.sqrt(scale) * att_vec
+            att_scr = scale * att_scr
+            self.vec_layers.append(att_vec.cpu().numpy())
+            self.scr_layers.append(att_scr.cpu().numpy())
+
+    def finished_layers(self):
+        if not self.attn_observer:
+            return
+
+        attns = np.stack(self.vec_layers, axis=1)
+        self.vec_layers = []
+
+        scrs = np.stack(self.scr_layers, axis=1)
+        self.scr_layers = []
+
+        self.attn_observer(attns, scrs)
 
 
 class BertEncoder(nn.Module):
@@ -474,23 +519,20 @@ class BertEncoder(nn.Module):
         hidden_states,
         attention_mask,
         output_all_encoded_layers=True,
-        return_attn=False,
+        attn_observer=None,
     ):
-        attn = []
+        layer_observer = AttentionLayerObserver(attn_observer)
         all_encoder_layers = []
         for layer_module in self.layer:
-            hidden_states, attn_or_none = layer_module(
-                hidden_states, attention_mask, return_attn=return_attn
+            hidden_states = layer_module(
+                hidden_states, attention_mask, attn_observer=layer_observer
             )
             if output_all_encoded_layers:
                 all_encoder_layers.append(hidden_states)
-            if return_attn:
-                attn.append(attn_or_none)
         if not output_all_encoded_layers:
             all_encoder_layers.append(hidden_states)
-        # batch x layer x head x from x to
-        attn = torch.stack(attn, dim=1) if return_attn else None
-        return all_encoder_layers, attn
+        layer_observer.finished_layers()
+        return all_encoder_layers
 
 
 class BertPooler(nn.Module):
@@ -1191,31 +1233,24 @@ class BertForSequenceClassification(BertPreTrainedModel):
         token_type_ids=None,
         attention_mask=None,
         labels=None,
-        return_attn=False,
+        attn_observer=None,
     ):
-        return_tuple = self.bert(
+        pooled_output = self.bert(
             input_ids,
             token_type_ids,
             attention_mask,
             output_all_encoded_layers=False,
-            return_attn=return_attn,
+            attn_observer=attn_observer,
         )
-        pooled_output = return_tuple[1]
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
 
         if labels is not None:
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-            return self._wrap_return(loss, return_tuple[2:])
+            return loss
         else:
-            return self._wrap_return(logits, return_tuple[2:])
-
-    def _wrap_return(self, x, tup):
-        """If tuple is nonempty, returns (x, tup[0]) else x"""
-        if tup:
-            return (x, tup[0])
-        return x
+            return logits
 
 
 class BertForMultipleChoice(BertPreTrainedModel):
