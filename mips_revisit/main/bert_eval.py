@@ -184,7 +184,7 @@ class AttentionObserver:
 
         ix = np.arange(int(self.s))
         sqnorm_blhs = scrs_blhft[..., ix, ix]
-        sqnorm_blhs[sqnorm_blhs < 0] = 0
+        sqnorm_blhs[(sqnorm_blhs < 0) | np.isnan(sqnorm_blhs)] = 0
         norm_blhs = np.sqrt(sqnorm_blhs)
         norm_blhs.sort(axis=-1)
         self.sum_norms_lhs += norm_blhs.sum(axis=0)
@@ -274,6 +274,8 @@ def _eval(eval_set_name, args, target_dir):
         for val, name in to_persist:
             np.save(os.path.join(target_dir, name), val)
 
+    # TODO: separate bert_pic.py to allow fast overwrite
+
     attns = acts_xlhft
 
     # now sort attns
@@ -284,78 +286,93 @@ def _eval(eval_set_name, args, target_dir):
     # marginal = layer x head x from x to
     # recall it's *ordered* on to index.
     plt = import_matplotlib()
-    marginal = avg_act_lhft.mean(axis=2).mean(axis=1).mean(axis=0)
 
-    def semilogy_acts(mat_bx):
+    def semilogy(mat_bx, *, scale, xlabel, ylabel, title, outfile, marginal):
         """plots b logscale curves, min max and median values"""
-        lo, med, hi = (x(mat_bx, axis=0) for x in [np.min, np.median, np.max])
+        minv, lo, med, hi, maxv = np.percentile(
+            mat_bx, [0, 25, 50, 75, 100], axis=0
+        )
         plt.semilogy(med, ls=":", label="median", color="black", lw=2)
         nx = mat_bx.shape[1]
         plt.xlim(0, nx)
-        plt.fill_between(range(nx), lo, hi, color="grey", alpha=0.5)
-        plt.semilogy(lo, ls="--", label="min", color="grey")
-        plt.semilogy(hi, ls="--", label="max", color="grey")
-        plt.ylim(10 ** -3, 1)
+        plt.fill_between(range(nx), minv, maxv, color="grey", alpha=0.5)
+        plt.semilogy(lo, ls="--", label="25th", color="blue")
+        plt.semilogy(hi, ls="--", label="75th", color="blue")
+        plt.semilogy(minv, ls="--", label="min", color="grey", alpha=0.75)
+        plt.semilogy(maxv, ls="--", label="max", color="grey", alpha=0.75)
+        if scale:
+            plt.ylim(*scale)
 
         plt.semilogy(marginal, ls="-", color="red", label="marginal", lw=1)
         plt.legend()
-        plt.xlabel("sorted activation index")
-        plt.ylabel("softmax weight")
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.title(title)
+        plt.savefig(outfile, format="pdf", bbox_inches="tight")
+        plt.clf()
+
+    marginal = avg_act_lhft.mean(axis=2).mean(axis=1).mean(axis=0)
+
+    def semilogy_acts(mat_bx, *, outfile, title):
+        semilogy(
+            mat_bx,
+            scale=(10 ** -4, 1),
+            xlabel="sorted activation index",
+            ylabel="softmax weight",
+            marginal=marginal,
+            title=title,
+            outfile=outfile,
+        )
 
     out_dir = target_dir
-
     outfile = os.path.join(out_dir, "act_layer.pdf")
     log.info("generating {}", outfile)
-    semilogy_acts(attns.mean(axis=3).mean(axis=2).mean(axis=0))
-    plt.title("attn by layer")
-    plt.savefig(outfile, format="pdf", bbox_inches="tight")
-    plt.clf()
+    semilogy_acts(
+        attns.mean(axis=3).mean(axis=2).mean(axis=0),
+        outfile=outfile,
+        title="attn by layer",
+    )
 
     outfile = os.path.join(out_dir, "act_head.pdf")
     log.info("generating {}", outfile)
-    semilogy_acts(attns.mean(axis=3).mean(axis=1).mean(axis=0))
-    plt.title("attn by head")
-    plt.savefig(outfile, format="pdf", bbox_inches="tight")
-    plt.clf()
+    semilogy_acts(
+        attns.mean(axis=3).mean(axis=1).mean(axis=0),
+        outfile=outfile,
+        title="attn by head",
+    )
 
     outfile = os.path.join(out_dir, "act_from_index.pdf")
     log.info("generating {}", outfile)
-    semilogy_acts(attns.mean(axis=2).mean(axis=1).mean(axis=0))
-    plt.title("attn by from idx")
-    plt.savefig(outfile, format="pdf", bbox_inches="tight")
-    plt.clf()
+    semilogy_acts(
+        attns.mean(axis=2).mean(axis=1).mean(axis=0),
+        outfile=outfile,
+        title="attn by from idx",
+    )
 
     marginal = avg_nrm_lhs.mean(axis=1).mean(axis=0)
 
-    def semilogy_nrms(mat_bx):
-        """plots b logscale curves, min max and median values"""
-        lo, med, hi = (x(mat_bx, axis=0) for x in [np.min, np.median, np.max])
-        plt.semilogy(med, ls=":", label="median", color="black", lw=2)
-        nx = mat_bx.shape[1]
-        plt.xlim(0, nx)
-        plt.fill_between(range(nx), lo, hi, color="grey", alpha=0.5)
-        plt.semilogy(lo, ls="--", label="min", color="grey")
-        plt.semilogy(hi, ls="--", label="max", color="grey")
-        plt.ylim(10 ** -3, 1)
-
-        plt.semilogy(marginal, ls="-", color="red", label="marginal", lw=1)
-        plt.legend()
-        plt.xlabel("sorted norm index")
-        plt.ylabel("norm")
+    def semilogy_nrms(mat_bx, outfile, title):
+        semilogy(
+            mat_bx,
+            scale=None,
+            xlabel="sorted norm index",
+            ylabel="norm",
+            marginal=marginal,
+            title=title,
+            outfile=outfile,
+        )
 
     outfile = os.path.join(out_dir, "nrm_layer.pdf")
     log.info("generating {}", outfile)
-    semilogy_nrms(avg_nrm_lhs.mean(axis=1))
-    plt.title("norm by layer")
-    plt.savefig(outfile, format="pdf", bbox_inches="tight")
-    plt.clf()
+    semilogy_nrms(
+        avg_nrm_lhs.mean(axis=1), title="norm by layer", outfile=outfile
+    )
 
     outfile = os.path.join(out_dir, "nrm_head.pdf")
     log.info("generating {}", outfile)
-    semilogy_nrms(avg_nrm_lhs.mean(axis=0))
-    plt.title("norm by head")
-    plt.savefig(outfile, format="pdf", bbox_inches="tight")
-    plt.clf()
+    semilogy_nrms(
+        avg_nrm_lhs.mean(axis=0), title="norm by head", outfile=outfile
+    )
 
 
 if __name__ == "__main__":

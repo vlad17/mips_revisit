@@ -8,8 +8,6 @@ import os
 
 from twilio.rest import Client
 
-from . import log
-
 
 def get_twilio_creds_and_phone():
     """
@@ -51,6 +49,8 @@ def makesms(body):
     try:
         sid, token, phone, origin = get_twilio_creds_and_phone()
     except KeyError as e:
+        from . import log
+
         log.debug(
             "error ({}) sending twilio message ({}), suppressing",
             e.args[0],
@@ -60,6 +60,4 @@ def makesms(body):
 
     client = Client(sid, token)
 
-    message = client.messages.create(body=body, from_=origin, to=phone)
-
-    log.debug("twilio {}", str(message))
+    client.messages.create(body=body, from_=origin, to=phone)
