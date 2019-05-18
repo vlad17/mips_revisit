@@ -59,7 +59,7 @@ class _LRSchedule(ABC):
                     warmup
                 )
             )
-        warmup = max(warmup, 0.)
+        warmup = max(warmup, 0.0)
         self.warmup, self.t_total = float(warmup), float(t_total)
         self.warned_for_t_total_at_progress = -1
 
@@ -70,14 +70,14 @@ class _LRSchedule(ABC):
         :return:        learning rate multiplier for current update
         """
         if self.t_total < 0:
-            return 1.
+            return 1.0
         progress = float(step) / self.t_total
         ret = self.get_lr_(progress)
         # warning for exceeding t_total (only active with warmup_linear
         if (
             not nowarn
             and self.warn_t_total
-            and progress > 1.
+            and progress > 1.0
             and progress > self.warned_for_t_total_at_progress
         ):
             logger.warning(
@@ -95,12 +95,12 @@ class _LRSchedule(ABC):
         :param progress:    value between 0 and 1 (unless going beyond t_total steps) specifying training progress
         :return:            learning rate multiplier for current update
         """
-        return 1.
+        return 1.0
 
 
 class ConstantLR(_LRSchedule):
     def get_lr_(self, progress):
-        return 1.
+        return 1.0
 
 
 class WarmupCosineSchedule(_LRSchedule):
@@ -112,7 +112,7 @@ class WarmupCosineSchedule(_LRSchedule):
 
     warn_t_total = True
 
-    def __init__(self, warmup=0.002, t_total=-1, cycles=.5, **kw):
+    def __init__(self, warmup=0.002, t_total=-1, cycles=0.5, **kw):
         """
         :param warmup:      see LRSchedule
         :param t_total:     see LRSchedule
@@ -131,7 +131,7 @@ class WarmupCosineSchedule(_LRSchedule):
             progress = (progress - self.warmup) / (
                 1 - self.warmup
             )  # progress after warmup
-            return 0.5 * (1. + math.cos(math.pi * self.cycles * 2 * progress))
+            return 0.5 * (1.0 + math.cos(math.pi * self.cycles * 2 * progress))
 
 
 class WarmupCosineWithHardRestartsSchedule(WarmupCosineSchedule):
@@ -141,11 +141,11 @@ class WarmupCosineWithHardRestartsSchedule(WarmupCosineSchedule):
     learning rate (with hard restarts).
     """
 
-    def __init__(self, warmup=0.002, t_total=-1, cycles=1., **kw):
+    def __init__(self, warmup=0.002, t_total=-1, cycles=1.0, **kw):
         super(WarmupCosineWithHardRestartsSchedule, self).__init__(
             warmup=warmup, t_total=t_total, cycles=cycles, **kw
         )
-        assert cycles >= 1.
+        assert cycles >= 1.0
 
     def get_lr_(self, progress):
         if progress < self.warmup:
@@ -155,7 +155,7 @@ class WarmupCosineWithHardRestartsSchedule(WarmupCosineSchedule):
                 1 - self.warmup
             )  # progress after warmup
             ret = 0.5 * (
-                1. + math.cos(math.pi * ((self.cycles * progress) % 1))
+                1.0 + math.cos(math.pi * ((self.cycles * progress) % 1))
             )
             return ret
 
@@ -169,22 +169,22 @@ class WarmupCosineWithWarmupRestartsSchedule(
     followed by a learning rate decreasing from 1. to 0. following a cosine curve.
     """
 
-    def __init__(self, warmup=0.002, t_total=-1, cycles=1., **kw):
-        assert warmup * cycles < 1.
+    def __init__(self, warmup=0.002, t_total=-1, cycles=1.0, **kw):
+        assert warmup * cycles < 1.0
         warmup = warmup * cycles if warmup >= 0 else warmup
         super(WarmupCosineWithWarmupRestartsSchedule, self).__init__(
             warmup=warmup, t_total=t_total, cycles=cycles, **kw
         )
 
     def get_lr_(self, progress):
-        progress = progress * self.cycles % 1.
+        progress = progress * self.cycles % 1.0
         if progress < self.warmup:
             return progress / self.warmup
         else:
             progress = (progress - self.warmup) / (
                 1 - self.warmup
             )  # progress after warmup
-            ret = 0.5 * (1. + math.cos(math.pi * progress))
+            ret = 0.5 * (1.0 + math.cos(math.pi * progress))
             return ret
 
 
@@ -197,7 +197,7 @@ class WarmupConstantSchedule(_LRSchedule):
     def get_lr_(self, progress):
         if progress < self.warmup:
             return progress / self.warmup
-        return 1.
+        return 1.0
 
 
 class WarmupLinearSchedule(_LRSchedule):
@@ -211,7 +211,7 @@ class WarmupLinearSchedule(_LRSchedule):
     def get_lr_(self, progress):
         if progress < self.warmup:
             return progress / self.warmup
-        return max((progress - 1.) / (self.warmup - 1.), 0.)
+        return max((progress - 1.0) / (self.warmup - 1.0), 0.0)
 
 
 SCHEDULES = {

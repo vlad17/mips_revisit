@@ -45,7 +45,6 @@ def _check_remote(remote_dir):
 
 
 def sync(src, dst):
-    assert not _check_remote(src)
     with timeit() as t:
         _sync(src, dst)
     log.debug("sync from {} to {} in {:.2f} sec", src, dst, t.seconds)
@@ -88,9 +87,15 @@ def exists(remote):
 
         c = client("s3")
         parsed = urlparse(remote, allow_fragments=False)
-        response = c.list_objects_v2(Bucket=parsed.netloc, Prefix=parsed.path)
+        bucket = parsed.netloc
+        path = parsed.path
+        while path.startswith("/"):
+            path = path[1:]
+        response = c.list_objects_v2(
+            Bucket=bucket, Prefix=path, Delimiter="/", MaxKeys=1
+        )
         for obj in response.get("Contents", []):
-            if obj["Key"] == key:
+            if obj["Key"] == path:
                 return True
         return False
     if remote.startswith(GCS_PREFIX):

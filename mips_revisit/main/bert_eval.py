@@ -61,7 +61,7 @@ flags.DEFINE_string("eval_dir", None, "evaluation directory")
 
 flags.DEFINE_bool("overwrite", False, "overwrite previous directory files")
 
-flags.DEFINE_int(
+flags.DEFINE_integer(
     "attention_samples", 64, "number of attention samples to grab"
 )
 
@@ -166,8 +166,8 @@ class AttentionObserver:
     def __init__(self, attn_sample_size, l, h, s):
         self.attn_reservoir = OnlineSampler(k=attn_sample_size)
         self.acts_reservoir = OnlineSampler(k=attn_sample_size)
-        self.sum_activations_lhft = np.zeros(l, h, s, s)
-        self.sum_norms_lhs = np.zeros(l, h, s)
+        self.sum_activations_lhft = np.zeros((l, h, s, s))
+        self.sum_norms_lhs = np.zeros((l, h, s))
         self.s = s
         self.count = 0
 
@@ -184,6 +184,7 @@ class AttentionObserver:
 
         ix = np.arange(int(self.s))
         sqnorm_blhs = scrs_blhft[..., ix, ix]
+        sqnorm_blhs[sqnorm_blhs < 0] = 0
         norm_blhs = np.sqrt(sqnorm_blhs)
         norm_blhs.sort(axis=-1)
         self.sum_norms_lhs += norm_blhs.sum(axis=0)
@@ -255,7 +256,7 @@ def _eval(eval_set_name, args, target_dir):
 
     (attn_xlsd, acts_xlhft, avg_act_lhft, avg_nrm_lhs) = observer.reify()
 
-    log.info(f"{eval_set_name} results {res}")
+    log.info("{} results {}", eval_set_name, res)
 
     # record results
     outfile = os.path.join(target_dir, "summary.json")

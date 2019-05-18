@@ -30,7 +30,6 @@ import tempfile
 from io import open
 
 import numpy as np
-
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
@@ -245,7 +244,7 @@ class BertConfig(object):
 
 try:
     from apex.normalization.fused_layer_norm import (
-        FusedLayerNorm as BertLayerNorm
+        FusedLayerNorm as BertLayerNorm,
     )
 except ImportError:
     logger.info(
@@ -886,7 +885,7 @@ class BertModel(BertPreTrainedModel):
         token_type_ids=None,
         attention_mask=None,
         output_all_encoded_layers=True,
-        return_attn=False,
+        attn_observer=None,
     ):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
@@ -911,20 +910,17 @@ class BertModel(BertPreTrainedModel):
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
         embedding_output = self.embeddings(input_ids, token_type_ids)
-        encoded_layers, attns = self.encoder(
+        encoded_layers = self.encoder(
             embedding_output,
             extended_attention_mask,
             output_all_encoded_layers=output_all_encoded_layers,
-            return_attn=return_attn,
+            attn_observer=attn_observer,
         )
         sequence_output = encoded_layers[-1]
         pooled_output = self.pooler(sequence_output)
         if not output_all_encoded_layers:
             encoded_layers = encoded_layers[-1]
-        if return_attn:
-            return encoded_layers, pooled_output, attns
-        else:
-            return encoded_layers, pooled_output
+        return encoded_layers, pooled_output
 
 
 class BertForPreTraining(BertPreTrainedModel):
@@ -1235,7 +1231,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
         labels=None,
         attn_observer=None,
     ):
-        pooled_output = self.bert(
+        _, pooled_output = self.bert(
             input_ids,
             token_type_ids,
             attention_mask,

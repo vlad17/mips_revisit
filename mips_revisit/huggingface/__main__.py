@@ -19,7 +19,7 @@ def main():
         if sys.argv[1] == "convert_tf_checkpoint_to_pytorch":
             try:
                 from .convert_tf_checkpoint_to_pytorch import (
-                    convert_tf_checkpoint_to_pytorch
+                    convert_tf_checkpoint_to_pytorch,
                 )
             except ImportError:
                 print(
@@ -43,7 +43,7 @@ def main():
                 )
         elif sys.argv[1] == "convert_openai_checkpoint":
             from .convert_openai_checkpoint_to_pytorch import (
-                convert_openai_checkpoint_to_pytorch
+                convert_openai_checkpoint_to_pytorch,
             )
 
             OPENAI_GPT_CHECKPOINT_FOLDER_PATH = sys.argv[2]
@@ -60,7 +60,7 @@ def main():
         elif sys.argv[1] == "convert_transfo_xl_checkpoint":
             try:
                 from .convert_transfo_xl_checkpoint_to_pytorch import (
-                    convert_transfo_xl_checkpoint_to_pytorch
+                    convert_transfo_xl_checkpoint_to_pytorch,
                 )
             except ImportError:
                 print(
@@ -87,7 +87,7 @@ def main():
         else:
             try:
                 from .convert_gpt2_checkpoint_to_pytorch import (
-                    convert_gpt2_checkpoint_to_pytorch
+                    convert_gpt2_checkpoint_to_pytorch,
                 )
             except ImportError:
                 print(

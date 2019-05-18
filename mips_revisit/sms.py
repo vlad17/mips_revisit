@@ -60,6 +60,6 @@ def makesms(body):
 
     client = Client(sid, token)
 
-    log.debug(
-        "twilio {}", client.messages.create(body=body, from_=origin, to=phone)
-    )
+    message = client.messages.create(body=body, from_=origin, to=phone)
+
+    log.debug("twilio {}", str(message))

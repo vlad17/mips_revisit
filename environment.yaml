@@ -293,8 +293,10 @@ dependencies:
   - torchvision=0.2.1=py_2
   - pip:
     - absl-py==0.7.1
+    - appdirs==1.4.3
     - astor==0.7.1
     - autovizwidget==0.12.7
+    - black==19.3b0
     - cached-property==1.5.1
     - docker==3.7.0
     - docker-compose==1.23.2
@@ -331,6 +333,7 @@ dependencies:
     - tensorflow-estimator==1.13.0
     - termcolor==1.1.0
     - texttable==0.9.1
+    - toml==0.10.0
     - torch==1.0.1
     - twilio==6.27.0
     - typing-extensions==3.7.2

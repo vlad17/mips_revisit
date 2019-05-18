@@ -20,7 +20,6 @@
 from collections import defaultdict
 
 import numpy as np
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -332,7 +331,7 @@ class LogUniformSampler(object):
         """
         with torch.no_grad():
             self.range_max = range_max
-            log_indices = torch.arange(1., range_max + 2., 1.).log_()
+            log_indices = torch.arange(1.0, range_max + 2.0, 1.0).log_()
             self.dist = (log_indices[1:] - log_indices[:-1]) / log_indices[-1]
             # print('P', self.dist.numpy().tolist()[-30:])
 
