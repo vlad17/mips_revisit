@@ -398,11 +398,35 @@ class BertSelfAttention(nn.Module):
                     attention_scores, k=self.k, dim=-1, sorted=True
                 )
                 # batch x head x from x 1
-                mink, _ = torch.min(vals, dim=-1, keepdim=True)
+                mink = vals[:, :, :, :1]
                 # batch x head x from x to
                 lt_mask = (attention_scores < mink).float() * -10000.0
             attention_scores += lt_mask
             del mink, vals, _, lt_mask
+
+        if self.attn == "topk-50":
+            with torch.no_grad():
+                # batch x head x from x k
+                _, ix = torch.topk(
+                    attention_scores, k=self.k, dim=-1, sorted=True
+                )
+                seqlen = attention_scores.shape[-1]
+                rand_resample_shape = ix.shape[:-1] + (self.k // 2,)
+                rand_resample = torch.randint(
+                    low=0, high=self.k, size=rand_resample_shape)
+                new_ixs = torch.randint(
+                    low=0, high=seqlen, size=rand_resample_shape)
+                ix.scatter_(-1, rand_resample, new_ixs)
+                del rand_resample, new_ixs, _
+
+                sample_mask = torch.zeros(attention_scores.shape)
+                mask_hot = torch.ones(ix.shape)
+                sample_mask.scatter_(-1, ix, mask_hot)
+                sample_mask = (1 - sample_mask).float() * -10000
+                del mask_hot, ix
+            attention_scores += sample_mask
+            del sample_mask
+
 
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
