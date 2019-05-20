@@ -156,6 +156,8 @@ class BertConfig(object):
         type_vocab_size=2,
         initializer_range=0.02,
         layer_norm_eps=1e-12,
+            attn="soft",
+            k=0,
     ):
         """Constructs BertConfig.
 
@@ -192,6 +194,12 @@ class BertConfig(object):
                 json_config = json.loads(reader.read())
             for key, value in json_config.items():
                 self.__dict__[key] = value
+
+            if 'k' not in json_config:
+                self.k = flags.FLAGS.k
+            if 'attn' not in json_config:
+                self.attn = flags.FLAGS.attn
+
         elif isinstance(vocab_size_or_config_json_file, int):
             self.vocab_size = vocab_size_or_config_json_file
             self.hidden_size = hidden_size
@@ -205,6 +213,9 @@ class BertConfig(object):
             self.type_vocab_size = type_vocab_size
             self.initializer_range = initializer_range
             self.layer_norm_eps = layer_norm_eps
+
+            self.k = k
+            self.attn = attn
         else:
             raise ValueError(
                 "First argument must be either a vocabulary size (int)"
@@ -217,6 +228,11 @@ class BertConfig(object):
         config = BertConfig(vocab_size_or_config_json_file=-1)
         for key, value in json_object.items():
             config.__dict__[key] = value
+        if 'k' not in json_object:
+            config.k = flags.FLAGS.k
+        if 'attn' not in json_object:
+            config.attn = flags.FLAGS.attn
+
         return config
 
     @classmethod
@@ -334,6 +350,8 @@ class BertSelfAttention(nn.Module):
         self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
+        self.k = config.k
+        self.attn = config.attn
 
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (
@@ -373,11 +391,11 @@ class BertSelfAttention(nn.Module):
         # attention_scores is batch x head x from x to
         attention_scores = attention_scores + attention_mask
 
-        if flags.FLAGS.attn == "topk":
+        if self.attn == "topk":
             with torch.no_grad():
                 # batch x head x from x k
                 vals, _ = torch.topk(
-                    attention_scores, k=flags.FLAGS.k, dim=-1, sorted=True
+                    attention_scores, k=self.k, dim=-1, sorted=True
                 )
                 # batch x head x from x 1
                 mink, _ = torch.min(vals, dim=-1, keepdim=True)
@@ -389,7 +407,7 @@ class BertSelfAttention(nn.Module):
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
 
-        if flags.FLAGS.attn == "soft":
+        if self.attn == "soft":
             # only use dropout for soft attention
 
             # This is actually dropping out entire tokens to attend to,
