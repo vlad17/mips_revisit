@@ -22,8 +22,8 @@ import re
 
 import numpy as np
 import tensorflow as tf
-import torch
 
+import torch
 from pytorch_pretrained_bert.modeling import (BertConfig, BertForPreTraining,
                                               load_tf_weights_in_bert)
 

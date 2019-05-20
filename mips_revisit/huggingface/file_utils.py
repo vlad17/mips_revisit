@@ -20,6 +20,7 @@ from io import open
 import boto3
 import requests
 from botocore.exceptions import ClientError
+
 from tqdm import tqdm
 
 try:

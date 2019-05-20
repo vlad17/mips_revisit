@@ -30,10 +30,11 @@ import tempfile
 from io import open
 
 import numpy as np
+from absl import flags
+
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
-from absl import flags
 
 from .file_utils import CONFIG_NAME, WEIGHTS_NAME, cached_path
 
@@ -375,8 +376,9 @@ class BertSelfAttention(nn.Module):
         if flags.FLAGS.attn == "topk":
             with torch.no_grad():
                 # batch x head x from x k
-                vals = torch.topk(attention_scores,
-                                  k=flags.FLAGS.k, dim=-1, sorted=True).values
+                vals = torch.topk(
+                    attention_scores, k=flags.FLAGS.k, dim=-1, sorted=True
+                ).values
                 # batch x head x from
                 mink = torch.min(vals, dim=-1)
                 # batch x head x from x to
