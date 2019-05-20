@@ -33,6 +33,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
+from absl import flags
 
 from .file_utils import CONFIG_NAME, WEIGHTS_NAME, cached_path
 
@@ -367,14 +368,32 @@ class BertSelfAttention(nn.Module):
             self.attention_head_size
         )
         # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
+
+        # attention_scores is batch x head x from x to
         attention_scores = attention_scores + attention_mask
+
+        if flags.FLAGS.attn == "topk":
+            with torch.no_grad():
+                # batch x head x from x k
+                vals = torch.topk(attention_scores,
+                                  k=flags.FLAGS.k, dim=-1, sorted=True).values
+                # batch x head x from
+                mink = torch.min(vals, dim=-1)
+                # batch x head x from x to
+                lt_mask = (attention_scores < mink) * -10000
+            attention_scores += lt_mask
 
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
 
-        # This is actually dropping out entire tokens to attend to, which might
-        # seem a bit unusual, but is taken from the original Transformer paper.
-        attention_probs = self.dropout(attention_probs)
+        if flags.FLAGS.attn == "soft":
+            # only use dropout for soft attention
+
+            # This is actually dropping out entire tokens to attend to,
+            # which might
+            # seem a bit unusual, but is taken from the original
+            # Transformer paper.
+            attention_probs = self.dropout(attention_probs)
 
         context_layer = torch.matmul(attention_probs, value_layer)
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
