@@ -416,11 +416,11 @@ class BertSelfAttention(nn.Module):
                     low=0, high=self.k, size=rand_resample_shape)
                 new_ixs = torch.randint(
                     low=0, high=seqlen, size=rand_resample_shape)
-                ix.scatter_(-1, rand_resample, new_ixs)
+                ix.scatter_(-1, rand_resample.cuda(), new_ixs.cuda())
                 del rand_resample, new_ixs, _
 
-                sample_mask = torch.zeros(attention_scores.shape)
-                mask_hot = torch.ones(ix.shape)
+                sample_mask = torch.zeros(attention_scores.shape).cuda()
+                mask_hot = torch.ones(ix.shape).cuda()
                 sample_mask.scatter_(-1, ix, mask_hot)
                 sample_mask = (1 - sample_mask).float() * -10000
                 del mask_hot, ix
