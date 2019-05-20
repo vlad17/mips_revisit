@@ -228,9 +228,9 @@ class BertConfig(object):
         config = BertConfig(vocab_size_or_config_json_file=-1)
         for key, value in json_object.items():
             config.__dict__[key] = value
-        if 'k' not in json_object:
+        if 'k' not in json_object and hasattr(flags.FLAGS, 'k'):
             config.k = flags.FLAGS.k
-        if 'attn' not in json_object:
+        if 'attn' not in json_object and hasattr(flags.FLAGS, 'attn'):
             config.attn = flags.FLAGS.attn
 
         return config
