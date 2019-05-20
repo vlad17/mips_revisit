@@ -94,7 +94,7 @@ def _main(_argv):
     args.server_port = ""
 
     try:
-        main(args)
+        main(args, None)
         sync(local_dir, out_dir)
         log.info("removing work dir {}", local_dir)
         shutil.rmtree(local_dir)
