@@ -376,14 +376,15 @@ class BertSelfAttention(nn.Module):
         if flags.FLAGS.attn == "topk":
             with torch.no_grad():
                 # batch x head x from x k
-                vals = torch.topk(
+                vals, _ = torch.topk(
                     attention_scores, k=flags.FLAGS.k, dim=-1, sorted=True
-                ).values
-                # batch x head x from
-                mink = torch.min(vals, dim=-1)
+                )
+                # batch x head x from x 1
+                mink, _ = torch.min(vals, dim=-1, keepdim=True)
                 # batch x head x from x to
-                lt_mask = (attention_scores < mink) * -10000
+                lt_mask = (attention_scores < mink).float() * -10000.0
             attention_scores += lt_mask
+            del mink, vals, _, lt_mask
 
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
