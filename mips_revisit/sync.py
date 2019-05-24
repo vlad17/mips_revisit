@@ -73,7 +73,7 @@ def _sync(src, dst):
         final_cmd = local_to_remote_sync_cmd
         sync_process = subprocess.Popen(final_cmd, shell=True)
         ret = sync_process.wait()  # fail gracefully
-        if not ret:
+        if ret != 0:
             log.info(
                 "sync from {} to {} failed with return code {}", src, dst, ret
             )

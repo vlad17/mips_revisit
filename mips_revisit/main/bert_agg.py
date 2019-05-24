@@ -43,6 +43,8 @@ from ..utils import timeit, import_matplotlib
 
 flags.DEFINE_string("prefix", None, "prefix directory")
 
+flags.DEFINE_string("cache", None, "cache directory (augogenerated based on task)")
+
 from ..params import GLUE_TASK_NAMES
 
 flags.DEFINE_bool("overwrite", False, "overwrite previous directory files")
@@ -65,11 +67,11 @@ def _main(_argv):
 
     for f in expected_files:
         f = os.path.join(prefix, f)
-        if not exists(f):
-            log.info("expected file {} to exist but it didn't", f)
+        if exists(f) and not flags.FLAGS.overwrite:
+            log.info("file {} exists but --overwrite is not specified", f)
             return
 
-    workdir = tempfile.mkdtemp(prefix="bert_agg")
+    workdir = flags.FLAGS.cache or "/tmp/bert_agg_{}".format(flags.FLAGS.task)
     log.info("work dir {}", workdir)
 
     with timeit(name="load results"):
@@ -79,9 +81,6 @@ def _main(_argv):
 
     with timeit(name="saving outputs"):
         sync(workdir, prefix)
-
-    log.info("removing work dir {}", workdir)
-    shutil.rmtree(workdir)
 
 def _setup_main(workdir):
     """
@@ -117,8 +116,7 @@ def _setup_main(workdir):
     attns = set(attn for folder_dict in loss.values() for attn in folder_dict )
     for attn in attns:
         for k in set(loss['dev'][attn]) & set(loss['train'][attn]):
-            loss['diff'][attn][k] = loss['dev'][attn] - loss['train'][attn]
-
+            loss['diff'][attn][k] = loss['dev'][attn][k] - loss['train'][attn][k]
 
     plt = import_matplotlib()
 
@@ -132,21 +130,21 @@ def _setup_main(workdir):
             ks = list(loss[folder][attn])
             ks.sort()
             losses = [loss[folder][attn][k] for k in ks]
-            plt.semilogy(ks, losses, ls='-', color='blue')
+            plt.plot(ks, losses, ls='--', color='blue', label=attn)
 
         attn = 'topk-50'
         if loss[folder][attn]:
             ks = list(loss[folder][attn])
             ks.sort()
             losses = [loss[folder][attn][k] for k in ks]
-            plt.semilogy(ks, losses, ls='--', color='red')
+            plt.plot(ks, losses, ls=':', color='green', label=attn)
 
         if folder == 'diff':
             name = 'dev-train loss gap'
-            filename = '{}_loss.pdf'.format(folder)
-        else:
-            name = folder + ' loss' if folder != 'diff' else
             filename = 'dev_train_gap.pdf'
+        else:
+            name = folder + ' loss'
+            filename = '{}_loss.pdf'.format(folder)
         plt.legend()
         plt.xlabel('k')
         plt.ylabel('loss')
@@ -160,7 +158,7 @@ def _setup_main(workdir):
             color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
             attn = 'soft'
-            c = color_cycle[c]
+            c = color_cycle[0]
             if 0 in distrib[folder][attn]:
                 plt.semilogy(distrib[folder][attn][0], label=attn, color=c, ls='--')
 
@@ -175,8 +173,8 @@ def _setup_main(workdir):
                     ks = ks[ixs]
                 distribs = [distrib[folder][attn][k] for k in ks]
 
-                for k, distrib, c in zip(ks, distribs, color_cycle[1:]):
-                    plt.semilogy(ks, losses, ls='-', color=c, alpha=0.7, label='topk k={}'.format(k))
+                for k, d, c in zip(ks, distribs, color_cycle[1:]):
+                    plt.semilogy(d, ls='-', color=c, alpha=0.7, label='topk k={}'.format(k))
 
             filename = '{}_{}.pdf'.format(folder, shortname)
             plt.legend()
@@ -202,9 +200,11 @@ def _is_resultdir(root, dirnames, filenames):
 
 def _get_json(filepath):
     with open(filepath, 'r') as f:
-        return json.load(f)
+        d = json.load(f)
+    return d
+        
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("task")
-    flags.mark_flag_as_required("eval_dir")
+    flags.mark_flag_as_required("prefix")
     app.run(_main)
