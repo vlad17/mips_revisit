@@ -15,13 +15,19 @@ source activate mips-revisit-env
 
 Run BERT pretraining with approximate K-MIPS.
 ```
+for K in 1 6 16 ; do 
 for ATTN in topk topk-50 ; do
 for TASK in mrpc cola ; do
-K=10
 S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert/${TASK}/k${K}/${ATTN}
 python -m mips_revisit.main.bert_finetune --k ${K} --attn ${ATTN} --task ${TASK} --out_dir ${S3PREFIX} --overwrite
 python -m mips_revisit.main.bert_eval --task ${TASK} --eval_dir ${S3PREFIX} --overwrite
 done
+done
+done
+
+for TASK in mrpc cola ; do
+S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert/${TASK}
+python -m mips_revisit.main.bert_agg --prefix ${S3PREFIX} --task ${TASK} --overwrite
 done
 ```
 
