@@ -121,11 +121,10 @@ def _main(_argv):
     )
 
 
-def save_train_results(local_dir, train_loss, bsz):
-    train_loss_dict = result["train_loss"]
+def save_train_results(local_dir, train_loss_pairs, bsz):
 
     outfile = os.path.join(local_dir, "train.npz")
-    examples_seen, train_loss = map(np.array, zip(*train_loss_dict))
+    examples_seen, train_loss = map(np.array, zip(*train_loss_pairs))
     np.savez(outfile, examples_seen=examples_seen, train_loss=train_loss)
 
     plt = import_matplotlib()
