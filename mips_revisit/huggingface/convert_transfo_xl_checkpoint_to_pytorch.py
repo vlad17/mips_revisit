@@ -24,11 +24,9 @@ from io import open
 import torch
 
 import pytorch_pretrained_bert.tokenization_transfo_xl as data_utils
-from pytorch_pretrained_bert.modeling_transfo_xl import (CONFIG_NAME,
-                                                         WEIGHTS_NAME,
-                                                         TransfoXLConfig,
-                                                         TransfoXLLMHeadModel,
-                                                         load_tf_weights_in_transfo_xl)
+from pytorch_pretrained_bert.modeling_transfo_xl import (
+    CONFIG_NAME, WEIGHTS_NAME, TransfoXLConfig, TransfoXLLMHeadModel,
+    load_tf_weights_in_transfo_xl)
 from pytorch_pretrained_bert.tokenization_transfo_xl import (CORPUS_NAME,
                                                              VOCAB_NAME)
 

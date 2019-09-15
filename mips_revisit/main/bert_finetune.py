@@ -44,6 +44,7 @@ flags.DEFINE_integer("k", 0, "k to use when using k-attention")
 
 flags.DEFINE_integer("seed", 1, "randomness seed")
 
+
 def _main(_argv):
     log.init()
 
@@ -111,14 +112,17 @@ def _main(_argv):
         shutil.rmtree(local_dir)
     except:
         makesms(
-            "ERROR in bert finetune\nseed={}\nk={}\nattn={}\ntask={}\nout_dir={}".format(
-                flags.FLAGS.seed, flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task
+            "ERROR in bert finetune\nseed={}\nk={}\nattn={}\ntask={}".format(
+                flags.FLAGS.seed,
+                flags.FLAGS.k,
+                flags.FLAGS.attn,
+                flags.FLAGS.task,
             )
         )
         raise
 
     makesms(
-        "COMPLETED bert finetune\nseed={}\nk={}\nattn={}\ntask={}\nout_dir={}".format(
+        "COMPLETED bert finetune\nseed={}\nk={}\nattn={}\ntask={}".format(
             flags.FLAGS.seed, flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task
         )
     )

@@ -131,8 +131,10 @@ def _setup_main(workdir):
                 nrm[folder][attn][k] = np.median(nrm[folder][attn][k])
 
     if len(trials) > 1:
-        log("UH-OH! some trials incomplete across runs. trial counts {}",
-            trials)
+        log(
+            "UH-OH! some trials incomplete across runs. trial counts {}",
+            trials,
+        )
     trials = min(trials)
 
     attns = set(attn for folder_dict in loss.values() for attn in folder_dict)

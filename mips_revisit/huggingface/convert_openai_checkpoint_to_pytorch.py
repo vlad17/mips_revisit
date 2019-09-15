@@ -21,10 +21,9 @@ from io import open
 
 import torch
 
-from pytorch_pretrained_bert.modeling_openai import (CONFIG_NAME, WEIGHTS_NAME,
-                                                     OpenAIGPTConfig,
-                                                     OpenAIGPTModel,
-                                                     load_tf_weights_in_openai_gpt)
+from pytorch_pretrained_bert.modeling_openai import (
+    CONFIG_NAME, WEIGHTS_NAME, OpenAIGPTConfig, OpenAIGPTModel,
+    load_tf_weights_in_openai_gpt)
 
 
 def convert_openai_checkpoint_to_pytorch(

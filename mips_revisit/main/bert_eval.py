@@ -107,7 +107,7 @@ def _main(_argv):
                 return
 
     glue_data = get_glue(flags.FLAGS.task)
-    with open(os.path.join(eval_dir, 'config.json'), 'r') as f:
+    with open(os.path.join(eval_dir, "config.json"), "r") as f:
         d = json.load(f)
     seed = d["seed"]
     seed_all(seed)
