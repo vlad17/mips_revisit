@@ -101,7 +101,9 @@ def _main(_argv):
 
     try:
         result = main(args, None)
-        save_train_results(local_dir, result["train_curve"], args.train_batch_size)
+        save_train_results(
+            local_dir, result["train_curve"], args.train_batch_size
+        )
 
         sync(local_dir, out_dir)
         log.info("removing work dir {}", local_dir)

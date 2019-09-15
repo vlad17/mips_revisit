@@ -55,7 +55,7 @@ def bert_glue_params(task):
         args.train_batch_size = 32
         args.eval_batch_size = 8
         # paper says 5e-5, github repo says 2e-5...
-        args.learning_rate = 5e-5
+        args.learning_rate = 2e-5
         args.num_train_epochs = 3
         args.warmup_proportion = 0.1
     else:
