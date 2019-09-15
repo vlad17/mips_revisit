@@ -623,7 +623,7 @@ def main(args, attn_observer):
     #
     # and each attention score
     # batch x layer x head x from x to
-    result = None
+    result = {}
 
     if args.server_ip and args.server_port:
         # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
@@ -875,6 +875,12 @@ def main(args, attn_observer):
         )
 
         model.train()
+        desired_points = 1000
+        points_per_epoch = max(1, desired_points // int(args.num_train_epochs))
+        batches_per_epoch = max(1, len(train_data) // args.train_batch_size)
+        record_every_n = max(1, batches_per_epoch // points_per_epoch )
+        examples_seen = 0
+        result["train_curve"] = []
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
             tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
@@ -906,7 +912,12 @@ def main(args, attn_observer):
                 else:
                     loss.backward()
 
-                tr_loss += loss.item()
+                loss_item = loss.item()
+                if (step + 1) % record_every_n == 0:
+                    examples_seen += record_every_n * args.train_batch_size
+                    result["train_curve"].append(
+                        (examples_seen, loss_item))
+                tr_loss += loss_item
                 nb_tr_examples += input_ids.size(0)
                 nb_tr_steps += 1
                 if (step + 1) % args.gradient_accumulation_steps == 0:
@@ -1052,7 +1063,7 @@ def main(args, attn_observer):
             preds = np.argmax(preds, axis=1)
         elif output_mode == "regression":
             preds = np.squeeze(preds)
-        result = compute_metrics(task_name, preds, all_label_ids.numpy())
+        result.update(compute_metrics(task_name, preds, all_label_ids.numpy()))
 
         result["eval_loss"] = eval_loss
 
@@ -1146,7 +1157,7 @@ def main(args, attn_observer):
             eval_loss = eval_loss / nb_eval_steps
             preds = preds[0]
             preds = np.argmax(preds, axis=1)
-            result = compute_metrics(task_name, preds, all_label_ids.numpy())
+            result.update(compute_metrics(task_name, preds, all_label_ids.numpy()))
             result["loss"] = eval_loss
     return result
 
