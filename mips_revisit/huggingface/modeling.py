@@ -30,9 +30,8 @@ import tempfile
 from io import open
 
 import numpy as np
-from absl import flags
-
 import torch
+from absl import flags
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
@@ -156,8 +155,8 @@ class BertConfig(object):
         type_vocab_size=2,
         initializer_range=0.02,
         layer_norm_eps=1e-12,
-            attn="soft",
-            k=0,
+        attn="soft",
+        k=0,
     ):
         """Constructs BertConfig.
 
@@ -195,9 +194,9 @@ class BertConfig(object):
             for key, value in json_config.items():
                 self.__dict__[key] = value
 
-            if 'k' not in json_config:
+            if "k" not in json_config:
                 self.k = flags.FLAGS.k
-            if 'attn' not in json_config:
+            if "attn" not in json_config:
                 self.attn = flags.FLAGS.attn
 
         elif isinstance(vocab_size_or_config_json_file, int):
@@ -228,9 +227,9 @@ class BertConfig(object):
         config = BertConfig(vocab_size_or_config_json_file=-1)
         for key, value in json_object.items():
             config.__dict__[key] = value
-        if 'k' not in json_object and hasattr(flags.FLAGS, 'k'):
+        if "k" not in json_object and hasattr(flags.FLAGS, "k"):
             config.k = flags.FLAGS.k
-        if 'attn' not in json_object and hasattr(flags.FLAGS, 'attn'):
+        if "attn" not in json_object and hasattr(flags.FLAGS, "attn"):
             config.attn = flags.FLAGS.attn
 
         return config
@@ -413,9 +412,11 @@ class BertSelfAttention(nn.Module):
                 seqlen = attention_scores.shape[-1]
                 rand_resample_shape = ix.shape[:-1] + (self.k // 2,)
                 rand_resample = torch.randint(
-                    low=0, high=self.k, size=rand_resample_shape)
+                    low=0, high=self.k, size=rand_resample_shape
+                )
                 new_ixs = torch.randint(
-                    low=0, high=seqlen, size=rand_resample_shape)
+                    low=0, high=seqlen, size=rand_resample_shape
+                )
                 ix.scatter_(-1, rand_resample.cuda(), new_ixs.cuda())
                 del rand_resample, new_ixs, _
 
@@ -426,7 +427,6 @@ class BertSelfAttention(nn.Module):
                 del mask_hot, ix
             attention_scores += sample_mask
             del sample_mask
-
 
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)

@@ -25,10 +25,9 @@ import random
 import sys
 
 import numpy as np
+import torch
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import f1_score, matthews_corrcoef
-
-import torch
 from torch.nn import CrossEntropyLoss, MSELoss
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
                               TensorDataset)
@@ -878,7 +877,7 @@ def main(args, attn_observer):
         desired_points = 1000
         points_per_epoch = max(1, desired_points // int(args.num_train_epochs))
         batches_per_epoch = max(1, len(train_data) // args.train_batch_size)
-        record_every_n = max(1, batches_per_epoch // points_per_epoch )
+        record_every_n = max(1, batches_per_epoch // points_per_epoch)
         examples_seen = 0
         result["train_curve"] = []
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
@@ -915,8 +914,7 @@ def main(args, attn_observer):
                 loss_item = loss.item()
                 if (step + 1) % record_every_n == 0:
                     examples_seen += record_every_n * args.train_batch_size
-                    result["train_curve"].append(
-                        (examples_seen, loss_item))
+                    result["train_curve"].append((examples_seen, loss_item))
                 tr_loss += loss_item
                 nb_tr_examples += input_ids.size(0)
                 nb_tr_steps += 1
@@ -1157,7 +1155,9 @@ def main(args, attn_observer):
             eval_loss = eval_loss / nb_eval_steps
             preds = preds[0]
             preds = np.argmax(preds, axis=1)
-            result.update(compute_metrics(task_name, preds, all_label_ids.numpy()))
+            result.update(
+                compute_metrics(task_name, preds, all_label_ids.numpy())
+            )
             result["loss"] = eval_loss
     return result
 

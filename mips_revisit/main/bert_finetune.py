@@ -17,10 +17,10 @@ vocab.txt - tokens used by the model
 import os
 import shutil
 
-import tensorflow as tf
-from absl import app, flags
 import numpy as np
 import pandas as pd
+import tensorflow as tf
+from absl import app, flags
 
 from .. import log
 from ..glue import get_glue
@@ -28,7 +28,7 @@ from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..sms import makesms
 from ..sync import exists, sync
-from ..utils import seed_all, import_matplotlib
+from ..utils import import_matplotlib, seed_all
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
@@ -101,7 +101,9 @@ def _main(_argv):
 
     try:
         result = main(args, None)
-        save_train_results(local_dir, result["train_loss"], args.train_batch_size)
+        save_train_results(
+            local_dir, result["train_loss"], args.train_batch_size
+        )
 
         sync(local_dir, out_dir)
         log.info("removing work dir {}", local_dir)
@@ -120,6 +122,7 @@ def _main(_argv):
         )
     )
 
+
 def save_train_results(local_dir, train_loss, bsz):
     train_loss_dict = result["train_loss"]
 
@@ -134,29 +137,29 @@ def save_train_results(local_dir, train_loss, bsz):
         examples_seen,
         train_loss,
         ls=":",
-        label='orig',
-        color='blue', alpha=0.7)
+        label="orig",
+        color="blue",
+        alpha=0.7,
+    )
 
     window = len(examples_seen) // 50
 
     if window > 1:
         s = pd.Series(data=train_loss, index=examples_seen)
         s = s.rolling(window=window).mean()
-        plt.plot(
-            s.index,
-            list(s),
-            color='blue',
-            label='MA({})'.format(window))
+        plt.plot(s.index, list(s), color="blue", label="MA({})".format(window))
 
     plt.legend()
-    plt.xlabel('examples seen')
-    plt.ylabel('training loss')
-    title = 'k={} attn={} task={} bsz='.format(
-        flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task, bsz)
+    plt.xlabel("examples seen")
+    plt.ylabel("training loss")
+    title = "k={} attn={} task={} bsz=".format(
+        flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task, bsz
+    )
     plt.title(title)
     outfile = os.path.join(out_dir, "train.pdf")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
     plt.clf()
+
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("task")
