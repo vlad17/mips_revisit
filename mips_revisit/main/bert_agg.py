@@ -3,7 +3,7 @@ Given a path prefix PREFIX of directories containing files
 
 config.json
 dev/{summary.json,average_activations.npy,averge_norms.npy}
-train/summary.json,average_activations.npy,averge_norms.}
+train/summary.json,average_activations.npy,averge_norms.npy}
 
 In the directory associated with the prefix, outputs the following files
 
@@ -92,14 +92,15 @@ def _setup_main(workdir):
     Runs locally, saving all intended output to workdir
     """
 
-    loss = defaultdict(lambda: defaultdict(dict))
+    loss = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     # nested mapping is
-    # eval (dev, train) -> attn (soft, topk, topk-50) -> k -> loss
+    # eval (dev, train) -> attn (soft, topk, topk-50) -> k -> [loss]
+    # list is over seeds
 
     # similar mapping, but only for topk
-    # eval -> attn (soft, topk) -> k -> marginal act/nrm
-    act = defaultdict(lambda: defaultdict(dict))
-    nrm = defaultdict(lambda: defaultdict(dict))
+    # eval -> attn (soft, topk) -> k -> [marginal act/nrm]
+    act = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    nrm = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 
     for root, dirnames, filenames in os.walk(workdir):
         if not _is_resultdir(root, dirnames, filenames):
@@ -116,9 +117,23 @@ def _setup_main(workdir):
             )
             dir_nrm = np.load(os.path.join(root, folder, "average_norms.npy"))
 
-            loss[folder][attn][k] = dir_summary["eval_loss"]
-            act[folder][attn][k] = dir_act.mean(2).mean(1).mean(0)
-            nrm[folder][attn][k] = dir_nrm.mean(1).mean(0)
+            loss[folder][attn][k].append(dir_summary["eval_loss"])
+            act[folder][attn][k].append(dir_act.mean(2).mean(1).mean(0))
+            nrm[folder][attn][k].append(dir_nrm.mean(1).mean(0))
+
+    trials = set()
+    for folder in loss:
+        for attn in loss[folder]:
+            for k in loss[folder][attn]:
+                trials.add(len(loss[folder][attn][k]))
+                loss[folder][attn][k] = np.median(loss[folder][attn][k])
+                act[folder][attn][k] = np.median(act[folder][attn][k])
+                nrm[folder][attn][k] = np.median(nrm[folder][attn][k])
+
+    if len(trials) > 1:
+        log("UH-OH! some trials incomplete across runs. trial counts {}",
+            trials)
+    trials = min(trials)
 
     attns = set(attn for folder_dict in loss.values() for attn in folder_dict)
     for attn in attns:

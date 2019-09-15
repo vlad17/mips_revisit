@@ -45,9 +45,12 @@ done
 K=0
 ATTN=soft
 TASK=mrpc
-S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert-2019/${TASK}/k${K}/${ATTN}
-python -m mips_revisit.main.bert_finetune --k ${K} --attn ${ATTN} --task ${TASK} --out_dir ${S3PREFIX}
+for SEED in 3 5 ; do
+S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert-4321/${TASK}/k${K}/${ATTN}/seed${SEED}
+python -m mips_revisit.main.bert_finetune --k ${K} --attn ${ATTN} --task ${TASK} --out_dir ${S3PREFIX} && \
 python -m mips_revisit.main.bert_eval --task ${TASK} --eval_dir ${S3PREFIX}
+done
+
 ```
 
 For text updates, set the following env vars.

@@ -231,7 +231,8 @@ class BertConfig(object):
             config.k = flags.FLAGS.k
         if "attn" not in json_object and hasattr(flags.FLAGS, "attn"):
             config.attn = flags.FLAGS.attn
-
+        if "seed" not in json_object and hasattr(flags.FLAGS, "attn"):
+            config.seed = flags.FLAGS.seed
         return config
 
     @classmethod

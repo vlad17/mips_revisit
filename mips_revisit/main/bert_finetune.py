@@ -42,6 +42,7 @@ flags.DEFINE_bool("overwrite", False, "overwrite previous directory files")
 
 flags.DEFINE_integer("k", 0, "k to use when using k-attention")
 
+flags.DEFINE_integer("seed", 1, "randomness seed")
 
 def _main(_argv):
     log.init()
@@ -59,13 +60,13 @@ def _main(_argv):
             return
 
     makesms(
-        "STARTING bert finetune\nk={}\nattn={}\ntask={}\nout_dir={}".format(
-            flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task, out_dir
+        "STARTING bert finetune\nseed={}\nk={}\nattn={}\ntask={}".format(
+            flags.FLAGS.seed, flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task
         )
     )
 
     glue_data = get_glue(flags.FLAGS.task)
-    seed_all(1234)
+    seed_all(flags.FLAGS.seed)
 
     args = bert_glue_params(flags.FLAGS.task)
     args.data_dir = glue_data
@@ -110,15 +111,15 @@ def _main(_argv):
         shutil.rmtree(local_dir)
     except:
         makesms(
-            "ERROR in bert finetune\nk={}\nattn={}\ntask={}\nout_dir={}".format(
-                flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task, out_dir
+            "ERROR in bert finetune\nseed={}\nk={}\nattn={}\ntask={}\nout_dir={}".format(
+                flags.FLAGS.seed, flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task
             )
         )
         raise
 
     makesms(
-        "COMPLETED bert finetune\nk={}\nattn={}\ntask={}\nout_dir={}".format(
-            flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task, out_dir
+        "COMPLETED bert finetune\nseed={}\nk={}\nattn={}\ntask={}\nout_dir={}".format(
+            flags.FLAGS.seed, flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task
         )
     )
 
@@ -151,7 +152,7 @@ def save_train_results(local_dir, train_loss_pairs, bsz):
     plt.legend()
     plt.xlabel("examples seen")
     plt.ylabel("training loss")
-    title = "k={} attn={} task={} bsz=".format(
+    title = "k={} attn={} task={} bsz={}".format(
         flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task, bsz
     )
     plt.title(title)

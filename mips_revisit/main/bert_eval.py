@@ -107,7 +107,10 @@ def _main(_argv):
                 return
 
     glue_data = get_glue(flags.FLAGS.task)
-    seed_all(1234)
+    with open(os.path.join(eval_dir, 'config.json'), 'r') as f:
+        d = json.load(f)
+    seed = d["seed"]
+    seed_all(seed)
 
     makesms("STARTING bert eval\neval_dir={}".format(eval_dir))
 
