@@ -9,6 +9,7 @@ Inside $OUT_DIR, creates the following files:
 
 config.json - BERT model configuration params
 train.npz - examples_seen and train_loss 1D arrays
+train.pdf - simple training curve based on the above
 pytorch_model.bin - binary pytorch state dict tuned classification BERT
 vocab.txt - tokens used by the model
 """
@@ -18,6 +19,8 @@ import shutil
 
 import tensorflow as tf
 from absl import app, flags
+import numpy as np
+import pandas as pd
 
 from .. import log
 from ..glue import get_glue
@@ -25,7 +28,7 @@ from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..sms import makesms
 from ..sync import exists, sync
-from ..utils import seed_all
+from ..utils import seed_all, import_matplotlib
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
@@ -98,9 +101,8 @@ def _main(_argv):
 
     try:
         result = main(args, None)
-        outfile = os.path.join(local_dir, "train.npz")
-        examples_seen, train_loss = map(np.array, zip(*result["train_loss"]))
-        np.savez(outfile, examples_seen=examples_seen, train_loss=train_loss)
+        save_train_results(local_dir, result["train_loss"], args.train_batch_size)
+
         sync(local_dir, out_dir)
         log.info("removing work dir {}", local_dir)
         shutil.rmtree(local_dir)
@@ -118,8 +120,46 @@ def _main(_argv):
         )
     )
 
+def save_train_results(local_dir, train_loss, bsz):
+    train_loss_dict = result["train_loss"]
+
+    outfile = os.path.join(local_dir, "train.npz")
+    examples_seen, train_loss = map(np.array, zip(*train_loss_dict))
+    np.savez(outfile, examples_seen=examples_seen, train_loss=train_loss)
+
+    plt = import_matplotlib()
+    log.info("generating {}", outfile)
+
+    plt.plot(
+        examples_seen,
+        train_loss,
+        ls=":",
+        label='orig',
+        color='blue', alpha=0.7)
+
+    window = len(examples_seen) // 50
+
+    if window > 1:
+        s = pd.Series(data=train_loss, index=examples_seen)
+        s = s.rolling(window=window).mean()
+        plt.plot(
+            s.index,
+            list(s),
+            color='blue',
+            label='MA({})'.format(window))
+
+    plt.legend()
+    plt.xlabel('examples seen')
+    plt.ylabel('training loss')
+    title = 'k={} attn={} task={} bsz='.format(
+        flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task, bsz)
+    plt.title(title)
+    outfile = os.path.join(out_dir, "train.pdf")
+    plt.savefig(outfile, format="pdf", bbox_inches="tight")
+    plt.clf()
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("task")
     flags.mark_flag_as_required("out_dir")
+
     app.run(_main)
