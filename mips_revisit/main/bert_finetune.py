@@ -8,6 +8,7 @@ performs the following:
 Inside $OUT_DIR, creates the following files:
 
 config.json - BERT model configuration params
+train.npz - examples_seen and train_loss 1D arrays
 pytorch_model.bin - binary pytorch state dict tuned classification BERT
 vocab.txt - tokens used by the model
 """
@@ -28,7 +29,9 @@ from ..utils import seed_all
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
-flags.DEFINE_enum("attn", "soft", ["soft", "topk", "topk-50"], "attention type")
+flags.DEFINE_enum(
+    "attn", "soft", ["soft", "topk", "topk-50"], "attention type"
+)
 
 flags.DEFINE_string("out_dir", None, "checkpoint output directory")
 
@@ -94,7 +97,10 @@ def _main(_argv):
     args.server_port = ""
 
     try:
-        main(args, None)
+        result = main(args, None)
+        outfile = os.path.join(local_dir, "train.npz")
+        examples_seen, train_loss = map(np.array, zip(*result["train_loss"]))
+        np.savez(outfile, examples_seen=examples_seen, train_loss=train_loss)
         sync(local_dir, out_dir)
         log.info("removing work dir {}", local_dir)
         shutil.rmtree(local_dir)

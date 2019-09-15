@@ -6,10 +6,11 @@ This expects twilio creds in your env
 
 import os
 
-from twilio.rest import Client
 from absl import flags
+from twilio.rest import Client
 
 flags.DEFINE_bool("twilio", True, "send message based on env vars")
+
 
 def get_twilio_creds_and_phone():
     """
@@ -50,7 +51,7 @@ def makesms(body):
 
     if not flags.FLAGS.twilio:
         return
-    
+
     try:
         sid, token, phone, origin = get_twilio_creds_and_phone()
     except KeyError as e:
