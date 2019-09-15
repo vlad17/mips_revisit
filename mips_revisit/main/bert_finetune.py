@@ -101,9 +101,7 @@ def _main(_argv):
 
     try:
         result = main(args, None)
-        save_train_results(
-            local_dir, result["train_loss"], args.train_batch_size
-        )
+        save_train_results(local_dir, result["train_curve"], args.train_batch_size)
 
         sync(local_dir, out_dir)
         log.info("removing work dir {}", local_dir)
@@ -156,7 +154,7 @@ def save_train_results(local_dir, train_loss, bsz):
         flags.FLAGS.k, flags.FLAGS.attn, flags.FLAGS.task, bsz
     )
     plt.title(title)
-    outfile = os.path.join(out_dir, "train.pdf")
+    outfile = os.path.join(local_dir, "train.pdf")
     plt.savefig(outfile, format="pdf", bbox_inches="tight")
     plt.clf()
 
