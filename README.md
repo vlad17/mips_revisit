@@ -27,30 +27,25 @@ To be done when dependencies update in the yaml file but your local environment 
 
 Run BERT pretraining with approximate K-MIPS.
 ```
-for K in 0 10; do 
-for ATTN in topk topk-50 ; do
-for TASK in mrpc cola ; do
-S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert/${TASK}/k${K}/${ATTN}
-python -m mips_revisit.main.bert_finetune --k ${K} --attn ${ATTN} --task ${TASK} --out_dir ${S3PREFIX} --overwrite
+# TODO task = cola
+TASK=mrpc
+for ATTN in soft topk topk-50 ; do 
+if [ ATTN = soft ] ; then
+  ks=0
+else
+  ks="5 25 65"
+fi
+for K in $ks ; do
+for SEED in 3 5 8 13 21 ; do
+S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert/${TASK}/k${K}/${ATTN}/seed${SEED}
+python -m mips_revisit.main.bert_finetune --k ${K} --attn ${ATTN} --task ${TASK} --out_dir ${S3PREFIX} --overwrite --seed ${SEED} && \
 python -m mips_revisit.main.bert_eval --task ${TASK} --eval_dir ${S3PREFIX} --overwrite
 done
 done
 done
 
-for TASK in mrpc cola ; do
 S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert/${TASK}
 python -m mips_revisit.main.bert_agg --prefix ${S3PREFIX} --task ${TASK} --overwrite
-done
-
-K=0
-ATTN=soft
-TASK=mrpc
-for SEED in 3 5 ; do
-S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert-4321/${TASK}/k${K}/${ATTN}/seed${SEED}
-python -m mips_revisit.main.bert_finetune --k ${K} --attn ${ATTN} --task ${TASK} --out_dir ${S3PREFIX} && \
-python -m mips_revisit.main.bert_eval --task ${TASK} --eval_dir ${S3PREFIX}
-done
-
 ```
 
 For text updates, set the following env vars.

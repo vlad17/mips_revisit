@@ -398,7 +398,7 @@ class BertSelfAttention(nn.Module):
                     attention_scores, k=self.k, dim=-1, sorted=True
                 )
                 # batch x head x from x 1
-                mink = vals[:, :, :, :1]
+                mink = vals[:, :, :, -1:]
                 # batch x head x from x to
                 lt_mask = (attention_scores < mink).float() * -10000.0
             attention_scores += lt_mask

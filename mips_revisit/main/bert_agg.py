@@ -131,7 +131,7 @@ def _setup_main(workdir):
                 nrm[folder][attn][k] = np.median(nrm[folder][attn][k])
 
     if len(trials) > 1:
-        log(
+        log.debug(
             "UH-OH! some trials incomplete across runs. trial counts {}",
             trials,
         )
