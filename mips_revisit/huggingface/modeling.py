@@ -404,14 +404,16 @@ class BertSelfAttention(nn.Module):
             attention_scores += lt_mask
             del mink, vals, _, lt_mask
 
-        if self.attn == "topk-50":
+        if self.attn.startswith("topk-"):
+            percent_decay = int(self.attn[len("topk-"):]) / 100
             with torch.no_grad():
                 # batch x head x from x k
                 _, ix = torch.topk(
                     attention_scores, k=self.k, dim=-1, sorted=True
                 )
                 seqlen = attention_scores.shape[-1]
-                rand_resample_shape = ix.shape[:-1] + (self.k // 2,)
+                rand_resample_shape = ix.shape[:-1] + (
+                    max(1, int(percent_decay * self.k)),)
                 rand_resample = torch.randint(
                     low=0, high=self.k, size=rand_resample_shape
                 )

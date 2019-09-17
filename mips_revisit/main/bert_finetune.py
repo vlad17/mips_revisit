@@ -33,7 +33,10 @@ from ..utils import import_matplotlib, seed_all
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
 flags.DEFINE_enum(
-    "attn", "soft", ["soft", "topk", "topk-50"], "attention type"
+    "attn",
+    "soft",
+    ["soft", "topk", "topk-10", "topk-25", "topk-50"],
+    "attention type",
 )
 
 flags.DEFINE_string("out_dir", None, "checkpoint output directory")
