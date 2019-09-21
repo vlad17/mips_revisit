@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import time
 from urllib.parse import urlparse
+import hashlib
 
 from . import log
 from .utils import timeit
@@ -22,6 +23,9 @@ except ImportError:  # py2
 S3_PREFIX = "s3://"
 GCS_PREFIX = "gs://"
 ALLOWED_REMOTE_PREFIXES = (S3_PREFIX, GCS_PREFIX)
+
+def simplehash(s):
+    return hashlib.md5(s).hexdigest()
 
 
 def _check_remote(remote_dir):
@@ -44,13 +48,13 @@ def _check_remote(remote_dir):
     return True
 
 
-def sync(src, dst):
+def sync(src, dst, *args):
     with timeit() as t:
-        _sync(src, dst)
+        _sync(src, dst, args)
     log.debug("sync from {} to {} in {:.2f} sec", src, dst, t.seconds)
 
 
-def _sync(src, dst):
+def _sync(src, dst, args):
     if _check_remote(dst):
         remote_dir = dst
     elif _check_remote(src):
@@ -61,12 +65,12 @@ def _sync(src, dst):
 
     local_to_remote_sync_cmd = None
     if remote_dir.startswith(S3_PREFIX):
-        local_to_remote_sync_cmd = "aws s3 sync {} {}".format(
-            quote(src), quote(dst)
+        local_to_remote_sync_cmd = "aws s3 sync {} {} {}".format(
+            quote(src), quote(dst), ' '.join(map(quote, args))
         )
     elif remote_dir.startswith(GCS_PREFIX):
-        local_to_remote_sync_cmd = "gsutil rsync -r {} {}".format(
-            quote(src), quote(dst)
+        local_to_remote_sync_cmd = "gsutil rsync -r {} {} {}".format(
+            quote(src), quote(dst), ' '.join(map(quote, args))
         )
 
     if local_to_remote_sync_cmd:

@@ -27,7 +27,7 @@ from ..glue import get_glue
 from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..sms import makesms
-from ..sync import exists, sync
+from ..sync import exists, sync, simplehash
 from ..utils import import_matplotlib, seed_all
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
@@ -76,16 +76,16 @@ def _main(_argv):
     args.data_dir = glue_data
 
     local_dir = os.path.join(
-        os.getcwd(), "generated", "initial", flags.FLAGS.task
+        os.getcwd(), "generated", simplehash(out_dir)
     )
     log.info(
         "using dir {} for local weights (final weights will be in {})",
         local_dir,
         out_dir,
     )
-    if os.path.exists(local_dir):
+    if flags.FLAGS.overwrite and os.path.exists(local_dir):
         shutil.rmtree(local_dir)
-    os.makedirs(local_dir, exist_ok=True)
+    os.makedirs(local_dir, exist_ok=False)
 
     args.output_dir = local_dir
     args.cache_dir = "/tmp/bert_cache"
@@ -110,9 +110,8 @@ def _main(_argv):
             local_dir, result["train_curve"], args.train_batch_size
         )
 
-        sync(local_dir, out_dir)
-        log.info("removing work dir {}", local_dir)
-        shutil.rmtree(local_dir)
+        with timeit(name="saving outputs"):
+            sync(local_dir, out_dir)
     except:
         makesms(
             "ERROR in bert finetune\nseed={}\nk={}\nattn={}\ntask={}".format(

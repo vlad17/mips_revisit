@@ -79,12 +79,16 @@ def _main(_argv):
     log.info("work dir {}", workdir)
 
     with timeit(name="load results"):
-        sync(prefix, workdir)
+        sync(prefix, workdir,
+             '--exclude', '*',
+             '--include', 'summary.json',
+             '--include', 'average_activations.npy',
+             '--include', 'averge_norms.npy')
 
     _setup_main(workdir)
 
     with timeit(name="saving outputs"):
-        sync(workdir, prefix)
+        sync(workdir, prefix, '--exclude', '*', '--include', '*.pdf')
 
 
 def _setup_main(workdir):

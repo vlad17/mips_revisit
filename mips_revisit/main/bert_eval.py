@@ -40,6 +40,7 @@ complete marginal vs layer-conditioned vs head-conditioned.
 """
 
 import json
+import itertools
 import os
 import shutil
 
@@ -52,7 +53,7 @@ from ..glue import get_glue
 from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..sms import makesms
-from ..sync import exists, sync
+from ..sync import exists, sync, simplehash
 from ..utils import OnlineSampler, import_matplotlib, seed_all, timeit
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
@@ -111,12 +112,22 @@ def _main(_argv):
     glue_data = get_glue(flags.FLAGS.task)
 
     local_dir = os.path.join(
-        os.getcwd(), "generated", "eval", flags.FLAGS.task
+        os.getcwd(), "generated", simplehash(eval_dir)
     )
     log.info("work dir {}", local_dir, glue_data)
 
     with timeit(name="load train weights"):
-        sync(eval_dir, local_dir)
+        sync(eval_dir, local_dir,
+             '--exclude', '*',
+             *itertools.chain.from_iterable(
+                 [['--include', x] for x in eval_files]))
+
+        if flags.FLAGS.overwrite:
+            for d in ["dev", "train"]:
+                for f in eval_files:
+                    f = os.path.join(local_dir, d, f)
+                    if os.path.exists(f):
+                        os.remove(f)
 
     with open(os.path.join(local_dir, "config.json"), "r") as f:
         d = json.load(f)
@@ -131,9 +142,6 @@ def _main(_argv):
 
     with timeit(name="saving outputs"):
         sync(local_dir, eval_dir)
-
-    log.info("removing work dir {}", local_dir)
-    shutil.rmtree(local_dir)
 
     makesms("COMPLETED bert eval\neval_dir={}".format(eval_dir))
 
