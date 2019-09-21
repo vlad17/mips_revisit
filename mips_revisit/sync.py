@@ -25,7 +25,7 @@ GCS_PREFIX = "gs://"
 ALLOWED_REMOTE_PREFIXES = (S3_PREFIX, GCS_PREFIX)
 
 def simplehash(s):
-    return hashlib.md5(s).hexdigest()
+    return hashlib.md5(s.encode('utf-8')).hexdigest()
 
 
 def _check_remote(remote_dir):
