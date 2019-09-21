@@ -25,29 +25,6 @@ To be done when dependencies update in the yaml file but your local environment 
 
 ## Usage
 
-Run BERT pretraining with approximate K-MIPS.
-```
-# TODO task = cola
-TASK=mrpc
-for ATTN in soft topk topk-50 ; do 
-if [ ATTN = soft ] ; then
-  ks=0
-else
-  ks="5 25 65"
-fi
-for K in $ks ; do
-for SEED in 3 5 8 13 21 ; do
-S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert/${TASK}/k${K}/${ATTN}/seed${SEED}
-python -m mips_revisit.main.bert_finetune --k ${K} --attn ${ATTN} --task ${TASK} --out_dir ${S3PREFIX} --overwrite --seed ${SEED} && \
-python -m mips_revisit.main.bert_eval --task ${TASK} --eval_dir ${S3PREFIX} --overwrite
-done
-done
-done
-
-S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert/${TASK}
-python -m mips_revisit.main.bert_agg --prefix ${S3PREFIX} --task ${TASK} --overwrite
-```
-
 For text updates, set the following env vars.
 
 ```
@@ -56,6 +33,34 @@ TWILIO_AUTH_TOKEN
 TARGET_PHONE_FOR_SMS
 ORIGIN_PHONE_FOR_SMS
 ```
+
+### Pretrained BERT, Motivational Top-K Finetune
+
+Motivational experiments. On a pretrained base BERT, per the paper, we can run fin-tuning with the paper's parameters for:
+
+* regular `soft` attention
+* exact `top-k` MIPS attention (either with `--resoftmax` or `--noresoftmax`)
+* `top-k-XX` inexact MIPS attention, with each of the top `k` entries resampled with probability `XX/100` as random tokens, also with optional softmax.
+
+Example with local scripts.
+
+```
+EXPERIMENT=bert-finetune-with-softmax
+TASK=mrpc
+ATTN=topk-25
+K=40
+
+for SEED in 3 5 8 13 21 ; do
+S3PREFIX=s3://vlad-deeplearn/mips-revisit/$EXPERIMENT/${TASK}/k${K}/${ATTN}/seed${SEED}
+python -m mips_revisit.main.bert_finetune --k ${K} --attn ${ATTN} --task ${TASK} --overwrite --out_dir ${S3PREFIX} --seed ${SEED} && \
+python -m mips_revisit.main.bert_eval --task ${TASK} --eval_dir ${S3PREFIX} --overwrite
+done
+
+S3PREFIX=s3://vlad-deeplearn/mips-revisit/bert-finetune-with-softmax/${TASK}
+python -m mips_revisit.main.bert_agg --prefix ${S3PREFIX} --task ${TASK} --overwrite
+```
+
+Example with cluster execution.
 
 ## Dev info
 

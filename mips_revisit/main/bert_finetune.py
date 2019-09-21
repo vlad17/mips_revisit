@@ -28,7 +28,7 @@ from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..sms import makesms
 from ..sync import exists, sync, simplehash
-from ..utils import import_matplotlib, seed_all
+from ..utils import import_matplotlib, seed_all, timeit
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
