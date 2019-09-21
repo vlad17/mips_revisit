@@ -158,12 +158,14 @@ def _setup_main(workdir):
             losses = [loss[folder][attn][k] for k in ks]
             plt.plot(ks, losses, ls="--", color="blue", label=attn)
 
-        attn = "topk-50"
-        if loss[folder][attn]:
-            ks = list(loss[folder][attn])
-            ks.sort()
-            losses = [loss[folder][attn][k] for k in ks]
-            plt.plot(ks, losses, ls=":", color="green", label=attn)
+        attns = [attn for attn in loss[folder] if attn.startswith("topk-")]
+
+        for attn, c in zip(attns, colors_transition(plt, len(attns)):
+            if loss[folder][attn]:
+                ks = list(loss[folder][attn])
+                ks.sort()
+                losses = [loss[folder][attn][k] for k in ks]
+                plt.plot(ks, losses, ls=":", color=c, label=attn)
 
         if folder == "diff":
             name = "dev-train loss gap"
@@ -203,7 +205,7 @@ def _setup_main(workdir):
                     ks = ks[ixs]
                 distribs = [distrib[folder][attn][k] for k in ks]
 
-                for k, d, c in zip(ks, distribs, color_cycle[1:]):
+                for k, d, c in zip(ks, distribs, color_cycle[1:])):
                     plt.semilogy(
                         d,
                         ls="-",
@@ -245,6 +247,16 @@ def _get_json(filepath):
     with open(filepath, "r") as f:
         d = json.load(f)
     return d
+
+def colors_transition(plt, ncolors):
+    import matplotlib.cm as mplcm
+    import matplotlib.colors as colors
+
+    cm = plt.get_cmap('spring')
+    cNorm  = colors.Normalize(vmin=0, vmax=ncolors-1)
+    scalarMap = mplcm.ScalarMappable(norm=cNorm, cmap=cm)
+    return [scalarMap.to_rgba(i) for i in range(ncolors)]
+
 
 
 if __name__ == "__main__":
