@@ -42,6 +42,7 @@ complete marginal vs layer-conditioned vs head-conditioned.
 from absl import app, flags
 
 from ..motivation.bert_eval import main
+from ..params import GLUE_TASK_NAMES
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
