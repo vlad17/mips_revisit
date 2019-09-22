@@ -1,13 +1,18 @@
+"""
+See main/local_motivation_bert_finetune.py module doc
+"""
+
 import os
 import shutil
 
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from absl import flags
+from absl import app, flags
 
 from .. import log
 from ..glue import get_glue
+# imports flags.FLAGS.{attn,k} via huggingface.modeling
 from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..sms import makesms

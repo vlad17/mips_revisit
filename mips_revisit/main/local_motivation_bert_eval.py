@@ -41,13 +41,13 @@ complete marginal vs layer-conditioned vs head-conditioned.
 
 from absl import app, flags
 
+from ..motivation.bert_eval import main
+
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
 flags.DEFINE_string("eval_dir", None, "evaluation directory")
 
 flags.DEFINE_bool("overwrite", False, "overwrite previous directory files")
-
-from ..motivation.bert_eval import main
 
 def _main(_argv):
     log.init()

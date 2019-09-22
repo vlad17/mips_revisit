@@ -14,22 +14,9 @@ pytorch_model.bin - binary pytorch state dict tuned classification BERT
 vocab.txt - tokens used by the model
 """
 
-import os
-import shutil
-
-import numpy as np
-import pandas as pd
-import tensorflow as tf
 from absl import app, flags
 
-from .. import log
-from ..glue import get_glue
-# imports flags.FLAGS.{attn,k} via huggingface.modeling
-from ..huggingface.run_classifier import main
-from ..params import GLUE_TASK_NAMES, bert_glue_params
-from ..sms import makesms
-from ..sync import exists, sync, simplehash
-from ..utils import import_matplotlib, seed_all, timeit
+from ..motivation.bert_finetune import main
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 
