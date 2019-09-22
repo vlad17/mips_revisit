@@ -14,7 +14,7 @@ from absl import flags
 from .. import log
 from ..huggingface.run_classifier import main
 from ..params import GLUE_TASK_NAMES
-from ..sync import exists, sync
+from ..sync import exists, sync, simplehash
 from ..utils import import_matplotlib, timeit
 
 def main(prefix, cache, overwrite, task):

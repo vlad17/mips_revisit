@@ -13,7 +13,7 @@ from scipy.special import softmax
 
 from .. import log
 from ..glue import get_glue
-from ..huggingface.run_classifier import main
+from ..huggingface.run_classifier import main as hmain
 from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..sms import makesms
 from ..sync import exists, sync, simplehash
@@ -217,7 +217,7 @@ def _eval(eval_set_name, args, target_dir):
 
     with timeit(name="run {} eval".format(eval_set_name)):
         args.eval_set_name = eval_set_name
-        res = main(args, observer)
+        res = hmain(args, observer)
 
     (attn_xlsd, acts_xlhft, avg_act_lhft, avg_nrm_lhs) = observer.reify()
 

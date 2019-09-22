@@ -13,7 +13,7 @@ from absl import app, flags
 from .. import log
 from ..glue import get_glue
 # imports flags.FLAGS.{attn,k} via huggingface.modeling
-from ..huggingface.run_classifier import main
+from ..huggingface.run_classifier import main as hmain
 from ..params import GLUE_TASK_NAMES, bert_glue_params
 from ..sms import makesms
 from ..sync import exists, sync, simplehash
@@ -73,9 +73,9 @@ def main(out_dir, overwrite, task, seed):
     args.server_port = ""
 
     try:
-        result = main(args, None)
+        result = hmain(args, None)
         save_train_results(
-            local_dir, result["train_curve"], args.train_batch_size
+            local_dir, result["train_curve"], args.train_batch_size, task
         )
 
         with timeit(name="saving outputs"):
@@ -98,7 +98,7 @@ def main(out_dir, overwrite, task, seed):
     )
 
 
-def save_train_results(local_dir, train_loss_pairs, bsz):
+def save_train_results(local_dir, train_loss_pairs, bsz, task):
 
     outfile = os.path.join(local_dir, "train.npz")
     examples_seen, train_loss = map(np.array, zip(*train_loss_pairs))
