@@ -37,6 +37,15 @@ from torch.nn import CrossEntropyLoss
 
 from .file_utils import CONFIG_NAME, WEIGHTS_NAME, cached_path
 
+flags.DEFINE_enum(
+    "attn",
+    "soft",
+    ["soft", "topk", "topk-10", "topk-25", "topk-50"],
+    "attention type",
+)
+
+flags.DEFINE_integer("k", 0, "k to use when using k-attention")
+
 logger = logging.getLogger(__name__)
 
 PRETRAINED_MODEL_ARCHIVE_MAP = {
