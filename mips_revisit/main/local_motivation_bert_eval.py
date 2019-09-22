@@ -43,6 +43,7 @@ from absl import app, flags
 
 from ..motivation.bert_eval import main
 from ..params import GLUE_TASK_NAMES
+from .. import log
 
 flags.DEFINE_enum("task", None, GLUE_TASK_NAMES, "BERT fine-tuning task")
 

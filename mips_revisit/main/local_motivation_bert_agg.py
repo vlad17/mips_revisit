@@ -31,6 +31,7 @@ from absl import app, flags
 
 from ..motivation.bert_agg import main
 from ..params import GLUE_TASK_NAMES
+from .. import log
 
 flags.DEFINE_string("prefix", None, "prefix directory")
 
