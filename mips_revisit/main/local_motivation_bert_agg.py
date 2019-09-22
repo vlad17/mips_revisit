@@ -30,6 +30,7 @@ All results should be from the same task for viz to make sense.
 from absl import app, flags
 
 from ..motivation.bert_agg import main
+from ..params import GLUE_TASK_NAMES
 
 flags.DEFINE_string("prefix", None, "prefix directory")
 
