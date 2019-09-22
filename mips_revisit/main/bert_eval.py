@@ -117,10 +117,7 @@ def _main(_argv):
     log.info("work dir {}", local_dir, glue_data)
 
     with timeit(name="load train weights"):
-        sync(eval_dir, local_dir,
-             '--exclude', '*',
-             *itertools.chain.from_iterable(
-                 [['--include', x] for x in eval_files]))
+        sync(eval_dir, local_dir)
 
         if flags.FLAGS.overwrite:
             for d in ["dev", "train"]:
@@ -141,7 +138,10 @@ def _main(_argv):
         raise
 
     with timeit(name="saving outputs"):
-        sync(local_dir, eval_dir)
+        sync(local_dir, eval_dir,
+             '--exclude', '*',
+             *itertools.chain.from_iterable(
+                 [['--include', '*' + x] for x in eval_files]))
 
     makesms("COMPLETED bert eval\neval_dir={}".format(eval_dir))
 

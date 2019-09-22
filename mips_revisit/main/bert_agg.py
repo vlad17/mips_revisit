@@ -2,8 +2,8 @@
 Given a path prefix PREFIX of directories containing files
 
 config.json
-dev/{summary.json,average_activations.npy,averge_norms.npy}
-train/summary.json,average_activations.npy,averge_norms.npy}
+dev/{summary.json,average_activations.npy,average_norms.npy}
+train/summary.json,average_activations.npy,average_norms.npy}
 
 In the directory associated with the prefix, outputs the following files
 
@@ -81,9 +81,10 @@ def _main(_argv):
     with timeit(name="load results"):
         sync(prefix, workdir,
              '--exclude', '*',
-             '--include', 'summary.json',
-             '--include', 'average_activations.npy',
-             '--include', 'averge_norms.npy')
+             '--include', '*config.json',
+             '--include', '*summary.json',
+             '--include', '*average_activations.npy',
+             '--include', '*average_norms.npy')
 
     _setup_main(workdir)
 
@@ -164,7 +165,7 @@ def _setup_main(workdir):
 
         attns = [attn for attn in loss[folder] if attn.startswith("topk-")]
 
-        for attn, c in zip(attns, colors_transition(plt, len(attns)):
+        for attn, c in zip(attns, colors_transition(plt, len(attns))):
             if loss[folder][attn]:
                 ks = list(loss[folder][attn])
                 ks.sort()
@@ -209,7 +210,7 @@ def _setup_main(workdir):
                     ks = ks[ixs]
                 distribs = [distrib[folder][attn][k] for k in ks]
 
-                for k, d, c in zip(ks, distribs, color_cycle[1:])):
+                for k, d, c in zip(ks, distribs, color_cycle[1:]):
                     plt.semilogy(
                         d,
                         ls="-",
